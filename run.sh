@@ -153,7 +153,8 @@ if [ "$updates" = ask ] || [ "$updates" = auto ]; then
                 else
                     notify-send --app-name=Roblox "--icon=$HERE/compat/roblox-linux.svg" ${id:+-r "$id"} Roblox \
                         'The update failed; launching the installed version. Run update-roblox.sh in a terminal for details.' 2>/dev/null || true
-                fi;;
+                fi
+                flock -w 60 "$HERE/DO_NOT_SHARE/instance.lock" true || true;;
             2) printf '%s\n' "$latest" > "$HERE/DO_NOT_SHARE/skipped-version";;
         esac
     fi

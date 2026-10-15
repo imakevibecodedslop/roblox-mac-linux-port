@@ -39,8 +39,10 @@ CRASH = re.compile(r'RBXCRASH: (?:UnhandledException \()?(.*?)\)?$')
 DARLING_ERROR = re.compile(r'^\*\*\* (.+) \*\*\*$')
 READY = re.compile(r'setStage: \(stage:LuaApp\)')
 LINK_TIMEOUT = 60
-# Stopping Roblox from its terminal or the session ending is not a crash.
+# Stopping Roblox from its terminal or the session ending is not a crash, and exit 73 means
+# another Roblox already held the instance lock.
 QUIET_SIGNALS = {'SIGINT', 'SIGTERM', 'SIGHUP'}
+QUIET_EXITS = {'0', '73'}
 
 
 def log(message):
@@ -323,7 +325,7 @@ class Companion:
                 reason = match[1]
             elif match := RESULT.match(line):
                 status = match
-        if not status or status[2] == '0' or status[4] in QUIET_SIGNALS:
+        if not status or status[2] in QUIET_EXITS or status[4] in QUIET_SIGNALS:
             return
         log_path = run_log.relative_to(self.data.parent)
         # Native crashes in the client leave a register dump in crashes/fatal.log instead.

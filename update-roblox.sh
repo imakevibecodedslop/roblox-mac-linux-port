@@ -16,7 +16,9 @@ flock -n 9 || { echo 'Close Roblox before updating.' >&2; exit 1; }
 # Serialize updates for this release folder.
 exec 8<"$HERE"
 flock -n 8 || { echo 'An update is already running.' >&2; exit 1; }
-version=$(sh "$HERE/run.sh" --client-version)
+# Children get the locks closed (8<&- 9>&-): a helper that outlives this script, such as the
+# AppImage's filesystem mount, would otherwise keep Roblox from starting after the update.
+version=$(sh "$HERE/run.sh" --client-version 8<&- 9>&-)
 # Extract-and-run may print filesystem progress before the application's output.
 version=$(printf '%s\n' "$version" | sed -n '/^version-[0-9a-f][0-9a-f]*$/p')
 [ -n "$version" ] || { echo 'Could not read the current Roblox version.' >&2; exit 1; }
@@ -37,9 +39,9 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM HUP
 # AppImage owns the downloader and shader tools, keeping this folder small.
-ROBLOX_MAC_DATA="$tmp" sh "$HERE/run.sh" --download-client
+ROBLOX_MAC_DATA="$tmp" sh "$HERE/run.sh" --download-client 8<&- 9>&-
 if ! ROBLOX_MAC_DATA="$tmp/runtime" ROBLOX_MAC_APP="$tmp/RobloxPlayer.app" \
-    sh "$HERE/run.sh" --debug --prepare-shaders ||
+    sh "$HERE/run.sh" --debug --prepare-shaders 8<&- 9>&- ||
    [ ! -f "$tmp/spv-cache-v1/report.json" ]; then
     echo 'Shader preparation failed; the previous client has not been changed.' >&2
     exit 1
