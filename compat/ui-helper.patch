@@ -1,13 +1,13 @@
-appdir
-base
-downloads
-fork
-libroblox-wayland.shipped.so
-patched
-RobloxLinux.AppImage.new
 --- a/runtime/browser/host.cpp
 +++ b/runtime/browser/host.cpp
-@@ -14,7 +14,8 @@
+@@ -8,19 +8,21 @@
+ #include <sys/stat.h>
+ #include <sys/un.h>
+ #include <unistd.h>
++#include <cerrno>
+ #include <signal.h>
+ #include <deque>
+ #include <string>
  #include <map>
  #include "client-url.h"
  
@@ -17,7 +17,15 @@ RobloxLinux.AppImage.new
  static GSubprocess *guest;
  static WebKitWebContext *context;
  static std::string browser_data;
-@@ -107,17 +108,20 @@
+ static unsigned long guest_xid;
+-static int exit_status,listener=-1;
+-static std::string socket_path;
++static int exit_status,listener=-1,link_listener=-1;
++static std::string socket_path,link_path;
+ struct Peer {int fd;std::string input;std::deque<std::string> output;guint write_watch=0;};
+ static Peer *peer;
+ struct Page {long id;WebKitWebView *view;bool delegate=false;std::string panel_title;};
+@@ -107,17 +109,20 @@
  static void controls() {
      bool browsing=current!=nullptr;
      bool panel=browsing && !current->panel_title.empty();
@@ -41,7 +49,35 @@ RobloxLinux.AppImage.new
  }
  static void return_to_game(GtkWidget*,gpointer) {
      if(current)send_object(event(current,"closed"));
-@@ -354,31 +358,25 @@
+@@ -320,6 +325,27 @@
+     if(peer){close(client);return G_SOURCE_CONTINUE;}
+     peer=new Peer{client,{}, {}};g_unix_fd_add(client,GIOCondition(G_IO_IN|G_IO_HUP|G_IO_ERR),incoming,peer);return G_SOURCE_CONTINUE;
+ }
++// roblox: and roblox-player: links opened while Roblox runs (run.sh hands them to links.sock) take the
++// same route as links from the embedded browser: the client's own URL handler.
++struct LinkClient {int fd;std::string text;};
++static gboolean link_readable(gint fd,GIOCondition condition,gpointer data) {
++    auto c=(LinkClient*)data;char buffer[4096];ssize_t n=read(fd,buffer,sizeof buffer);
++    if(n>0)c->text.append(buffer,n);
++    if(n>0 && c->text.size()<=16384 && c->text.find('\n')==std::string::npos)return G_SOURCE_CONTINUE;
++    if(n<0 && errno==EAGAIN && !(condition&(G_IO_HUP|G_IO_ERR)))return G_SOURCE_CONTINUE;
++    std::string url=c->text.substr(0,c->text.find('\n'));
++    if(rbx_client_url(url.c_str())) {
++        auto o=event(nullptr,"launch-url");json_object_set_string_member(o,"url",url.c_str());send_object(o);
++        gtk_window_present(GTK_WINDOW(window));
++        g_printerr(peer?"roblox-mac: forwarded a link to the client\n":"roblox-mac: dropped a link; the client has not connected yet\n");
++    } else g_printerr("roblox-mac: ignored an invalid link\n");
++    close(fd);delete c;return G_SOURCE_REMOVE;
++}
++static gboolean accept_link(gint fd,GIOCondition,gpointer) {
++    int client=accept4(fd,nullptr,nullptr,SOCK_NONBLOCK|SOCK_CLOEXEC);
++    if(client>=0)g_unix_fd_add(client,GIOCondition(G_IO_IN|G_IO_HUP|G_IO_ERR),link_readable,new LinkClient{client,{}});
++    return G_SOURCE_CONTINUE;
++}
+ static gboolean closed(GtkWidget*,GdkEvent*,gpointer) {
+     if(native_wayland){request_close();return TRUE;}
+     if(guest_xid) {
+@@ -354,31 +380,25 @@
      g_setenv("ROBLOX_MAC_WEBKIT_USER_AGENT",webkit_settings_get_user_agent(settings),TRUE);g_object_unref(settings);
      if(native_wayland)g_printerr("WAYLAND WebKit settings initialized\n");
      window=gtk_window_new(GTK_WINDOW_TOPLEVEL);gtk_window_set_title(GTK_WINDOW(window),"Roblox");gtk_window_set_default_size(GTK_WINDOW(window),1100,800);
@@ -81,6 +117,32 @@ RobloxLinux.AppImage.new
      if(!native_wayland)g_signal_connect(socket_view,"plug-removed",G_CALLBACK(+[](GtkSocket*,gpointer)->gboolean{return TRUE;}),nullptr);
      g_signal_connect(window,"delete-event",G_CALLBACK(closed),nullptr);
      if(native_wayland)g_printerr("WAYLAND widgets initialized\n");
+@@ -389,6 +409,13 @@
+     strcpy(address.sun_path,socket_path.c_str());listener=socket(AF_UNIX,SOCK_STREAM|SOCK_NONBLOCK|SOCK_CLOEXEC,0);
+     if(listener<0 || bind(listener,(sockaddr*)&address,sizeof(address)) || listen(listener,4)){g_printerr("roblox-mac: UI socket creation failed\n");return 1;}
+     chmod(socket_path.c_str(),0600);g_unix_fd_add(listener,G_IO_IN,accept_peer,nullptr);
++    link_path=std::string(g_getenv("ROBLOX_MAC_STAGE"))+"/links.sock";sockaddr_un link_address{};link_address.sun_family=AF_UNIX;
++    if(link_path.size()<sizeof(link_address.sun_path)) {
++        strcpy(link_address.sun_path,link_path.c_str());link_listener=socket(AF_UNIX,SOCK_STREAM|SOCK_NONBLOCK|SOCK_CLOEXEC,0);
++        if(link_listener>=0 && !bind(link_listener,(sockaddr*)&link_address,sizeof(link_address)) && !listen(link_listener,4)) {
++            chmod(link_path.c_str(),0600);g_unix_fd_add(link_listener,G_IO_IN,accept_link,nullptr);
++        } else g_printerr("roblox-mac: link socket creation failed; links open only when Roblox starts\n");
++    }
+     std::string guest_path="/Volumes/SystemRoot"+socket_path;g_setenv("ROBLOX_MAC_UI_SOCKET",guest_path.c_str(),TRUE);
+ #ifdef RBX_WAYLAND_LIBRARY
+     g_printerr("WAYLAND IPC ready\n");gtk_widget_show_all(window);g_printerr("WAYLAND window shown\n");controls();return 0;
+@@ -399,8 +426,9 @@
+     else g_subprocess_launcher_unsetenv(launcher,"LD_LIBRARY_PATH");
+     for(auto key:{"GIO_MODULE_DIR","GSETTINGS_SCHEMA_DIR","WEBKIT_INJECTED_BUNDLE_PATH"})g_subprocess_launcher_unsetenv(launcher,key);
+     guest=g_subprocess_launcher_spawnv(launcher,(const gchar*const*)(argv+1),&error);g_object_unref(launcher);
+-    if(!guest){g_printerr("roblox-mac: client launch failed\n");unlink(socket_path.c_str());return 1;}
++    if(!guest){g_printerr("roblox-mac: client launch failed\n");unlink(socket_path.c_str());unlink(link_path.c_str());return 1;}
+     g_subprocess_wait_async(guest,nullptr,guest_done,nullptr);gtk_main();
+     for(auto [id,d]:decisions){webkit_policy_decision_ignore(d);g_object_unref(d);}
+-    gtk_widget_destroy(window);close(listener);unlink(socket_path.c_str());g_object_unref(guest);return exit_status;
++    gtk_widget_destroy(window);close(listener);unlink(socket_path.c_str());
++    if(link_listener>=0){close(link_listener);unlink(link_path.c_str());}g_object_unref(guest);return exit_status;
+ }
 --- a/runtime/browser/wayland.cpp
 +++ b/runtime/browser/wayland.cpp
 @@ -78,9 +78,11 @@

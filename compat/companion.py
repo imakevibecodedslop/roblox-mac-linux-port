@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Desktop integration that runs beside Roblox: Discord Rich Presence, a server-location
-notification when joining a game, Feral GameMode, and a notification when Roblox crashes. It
-reads Roblox's own logs and never touches the client. Started by run.sh; exits when the
-launcher process it watches exits.
+notification when joining a game, Feral GameMode, a notification when Roblox crashes, and
+delivery of a browser link once Roblox is ready. It reads Roblox's own logs and never touches
+the client. Started by run.sh; exits when the launcher process it watches exits.
 
 Settings (DO_NOT_SHARE/config.env, KEY=value, 1 = on, 0 = off):
   ROBLOX_LINUX_DISCORD=1         show the current game on your Discord profile
@@ -35,6 +35,10 @@ LEAVE = re.compile(r'leaveUGCGameInternal|Time to disconnect replication data')
 RPC = re.compile(r'\[BloxstrapRPC\] (\{.*\})')
 RESULT = re.compile(r'^Runtime result: (exit (\d+)|signal (\d+) \((\w+)\))')
 CRASH = re.compile(r'RBXCRASH: (?:UnhandledException \()?(.*?)\)?$')
+# Darling reports its own failures between asterisks, e.g. "*** dserver_rpc_interrupt_enter failed ***".
+DARLING_ERROR = re.compile(r'^\*\*\* (.+) \*\*\*$')
+READY = re.compile(r'setStage: \(stage:LuaApp\)')
+LINK_TIMEOUT = 60
 # Stopping Roblox from its terminal or the session ending is not a crash.
 QUIET_SIGNALS = {'SIGINT', 'SIGTERM', 'SIGHUP'}
 
@@ -148,10 +152,25 @@ class Game:
         return activity
 
 
+def open_link(release, url):
+    """Hand a roblox: link to the running client through the UI helper's link socket."""
+    for path in (release / 'DO_NOT_SHARE').glob('launch.*/links.sock'):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+            connection.settimeout(5)
+            try:
+                connection.connect(str(path))
+                connection.sendall(url.encode() + b'\n')
+                return True
+            except OSError:
+                continue  # a leftover socket from an earlier session
+    return False
+
+
 class Companion:
-    def __init__(self, release, launcher_pid):
+    def __init__(self, release, launcher_pid, link=None):
         self.data = release / 'DO_NOT_SHARE'
         self.launcher_pid = launcher_pid
+        self.link = link
         self.settings = read_settings(self.data)
         self.discord = Discord() if self.settings['ROBLOX_LINUX_DISCORD'] else None
         self.game = None
@@ -207,6 +226,13 @@ class Companion:
             self.update_presence()
         elif (match := RPC.search(line)) and self.game:
             self.apply_game_status(match[1])
+        elif self.link and READY.search(line):
+            self.deliver_link()
+
+    def deliver_link(self):
+        if not open_link(self.data.parent, self.link):
+            log('could not hand the link to Roblox')
+        self.link = None
 
     def apply_game_status(self, text):
         # Games can set their own status with BloxstrapRPC; text and times only.
@@ -270,6 +296,8 @@ class Companion:
                 if not self.client_started:
                     self.client_started = int(time.time())
                     self.update_presence()
+            if self.link and time.time() - self.started > LINK_TIMEOUT:
+                self.deliver_link()
             chunk = log_file.read() if log_file else ''
             if not chunk:
                 time.sleep(0.5)
@@ -291,17 +319,25 @@ class Companion:
         run_log = max(runs, key=lambda run: run.stat().st_mtime)
         reason, status = None, None
         for line in run_log.read_text(errors='replace').splitlines():
-            if match := CRASH.search(line):
+            if match := CRASH.search(line) or DARLING_ERROR.match(line):
                 reason = match[1]
             elif match := RESULT.match(line):
                 status = match
         if not status or status[2] == '0' or status[4] in QUIET_SIGNALS:
             return
-        notify('Roblox closed unexpectedly', f'{reason or status[1]}\nLog: {run_log.relative_to(self.data.parent)}')
+        log_path = run_log.relative_to(self.data.parent)
+        # Native crashes in the client leave a register dump in crashes/fatal.log instead.
+        fatal = self.data / 'crashes/fatal.log'
+        if not reason and fatal.exists() and fatal.stat().st_mtime >= self.started:
+            reason = 'The client crashed inside the compatibility layer'
+            log_path = fatal.relative_to(self.data.parent)
+        notify('Roblox closed unexpectedly', f'{reason or status[1]}\nLog: {log_path}')
 
 
 if __name__ == '__main__':
+    if sys.argv[1] == '--open-link':
+        sys.exit(0 if open_link(Path(sys.argv[2]), sys.argv[3]) else 1)
     try:
-        Companion(Path(sys.argv[1]), int(sys.argv[2])).run()
+        Companion(Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3] if len(sys.argv) > 3 else None).run()
     except KeyboardInterrupt:
         pass  # Ctrl+C in the launching terminal reaches this process too; exit without a traceback.

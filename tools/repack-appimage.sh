@@ -14,7 +14,7 @@ work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 unsquashfs -q -n -no-xattrs -o "$OFFSET" -d "$work/appdir" "$ORIGINAL"
 install -m 755 "$HELPER" "$work/appdir/optimized/ui/libroblox-wayland.so"
-echo 'local: UI helper rebuilt from source (69908c3) with window-manager decorations and a browser toolbar' >> "$work/appdir/BUILD-ID"
+echo 'local: UI helper rebuilt from source (69908c3) with window-manager decorations, a browser toolbar and a link socket' >> "$work/appdir/BUILD-ID"
 mksquashfs "$work/appdir" "$work/image.squashfs" -comp zstd -b 131072 -all-root -no-xattrs -noappend -quiet
 head -c "$OFFSET" "$ORIGINAL" > "$work/out.AppImage"
 cat "$work/image.squashfs" >> "$work/out.AppImage"

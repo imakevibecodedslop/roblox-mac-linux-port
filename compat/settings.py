@@ -11,8 +11,8 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import GLib, Gtk
 
-DEFAULTS = {'ROBLOX_LINUX_UPDATES': 'ask', 'ROBLOX_LINUX_DISCORD': '1',
-            'ROBLOX_LINUX_SERVER_NOTIFY': '1', 'ROBLOX_LINUX_GAMEMODE': '1'}
+DEFAULTS = {'ROBLOX_LINUX_UPDATES': 'ask', 'ROBLOX_LINUX_DISCORD': '1', 'ROBLOX_LINUX_SERVER_NOTIFY': '1',
+            'ROBLOX_LINUX_GAMEMODE': '1', 'ROBLOX_LINUX_LINKS': '1'}
 UPDATE_CHOICES = [('ask', 'Ask before updating'), ('auto', 'Update automatically'), ('off', 'Never check')]
 
 
@@ -82,6 +82,11 @@ def build_window(release):
         toggle = Gtk.Switch(active=available and config.get(key) == '1', sensitive=available)
         toggle.connect('notify::active', lambda widget, _: config.set(key, '1' if widget.get_active() else '0'))
         content.pack_start(row(title, subtitle, toggle), False, False, 0)
+
+    content.pack_start(section('Browser'), False, False, 0)
+    switch('ROBLOX_LINUX_LINKS', 'Open Roblox links here',
+           'Play buttons on roblox.com start this Roblox. Turning this off gives links back to the app '
+           'that had them before.')
 
     content.pack_start(section('While playing'), False, False, 0)
     switch('ROBLOX_LINUX_DISCORD', 'Show the game on Discord', 'Your Discord profile shows the game you are in.')

@@ -35,8 +35,9 @@ case "$HERE" in *[\"\`\$\\]*) ;; *)
         cmp -s "$HERE/compat/roblox-linux.svg" "$icon" || install -m 644 "$HERE/compat/roblox-linux.svg" "$icon"
         # A full icon path needs no icon-theme lookup or cache refresh.
         printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=Roblox (Linux)' \
-            'Comment=Roblox macOS client through Darling' "Exec=sh \"$HERE/run.sh\"" "Path=$HERE" \
-            "Icon=$icon" 'Terminal=false' 'Categories=Game;' 'StartupWMClass=roblox-mac' 'Actions=settings;' '' \
+            'Comment=Roblox macOS client through Darling' "Exec=sh \"$HERE/run.sh\" %u" "Path=$HERE" \
+            "Icon=$icon" 'Terminal=false' 'Categories=Game;' 'StartupWMClass=roblox-mac' \
+            'MimeType=x-scheme-handler/roblox-player;x-scheme-handler/roblox;' 'Actions=settings;' '' \
             '[Desktop Action settings]' 'Name=Settings' "Exec=sh \"$HERE/run.sh\" --settings" > "$HERE/DO_NOT_SHARE/tmp/roblox-mac.desktop"
         if ! cmp -s "$HERE/DO_NOT_SHARE/tmp/roblox-mac.desktop" "$host_data/applications/roblox-mac.desktop"; then
             install -m 644 "$HERE/DO_NOT_SHARE/tmp/roblox-mac.desktop" "$host_data/applications/roblox-mac.desktop"
@@ -91,16 +92,41 @@ case "${1:-}" in
     --settings) exec python3 -I "$HERE/compat/settings.py" "$HERE";;
     --diagnose|--debug|--client-version|--download-client) exec "$HERE/RobloxLinux.AppImage" "$@";;
 esac
-# A second launch would exit silently on the instance lock; say why instead.
+setting() {
+    value=$(sed -n "s/^\\(export \\)\\{0,1\\}$1=[\"']\\{0,1\\}\\([a-z0-9]*\\).*/\\2/p" "$HERE/DO_NOT_SHARE/config.env" 2>/dev/null | tail -n 1) || value=
+    eval "printf '%s' \"\${$1:-\${value:-$2}}\""
+}
+# Browser links (Play buttons on roblox.com). ROBLOX_LINUX_LINKS=1 makes this the desktop's handler
+# for roblox: and roblox-player: links; 0 gives them back to the previous handler.
+for scheme in roblox-player roblox; do
+    current=$(xdg-mime query default "x-scheme-handler/$scheme" 2>/dev/null) || current=
+    if [ "$(setting ROBLOX_LINUX_LINKS 1)" = 1 ]; then
+        if [ "$current" != roblox-mac.desktop ]; then
+            printf '%s\n' "$current" > "$HERE/DO_NOT_SHARE/previous-$scheme-handler"
+            xdg-mime default roblox-mac.desktop "x-scheme-handler/$scheme" 2>/dev/null || true
+        fi
+    elif [ "$current" = roblox-mac.desktop ]; then
+        previous=$(cat "$HERE/DO_NOT_SHARE/previous-$scheme-handler" 2>/dev/null) || previous=
+        [ -n "$previous" ] && xdg-mime default "$previous" "x-scheme-handler/$scheme" 2>/dev/null || true
+    fi
+done
+link=
+case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+    roblox:?*|roblox-player:?*) [ "$#" = 1 ] && { link=$1; shift; };;
+esac
+# A second launch would exit silently on the instance lock; hand a link to the running client,
+# otherwise say why nothing happens.
 if [ -e "$HERE/DO_NOT_SHARE/instance.lock" ] && ! flock -n "$HERE/DO_NOT_SHARE/instance.lock" true; then
+    if [ -n "$link" ] && python3 -I "$HERE/compat/companion.py" --open-link "$HERE" "$link"; then
+        exit 0
+    fi
     command -v notify-send >/dev/null && notify-send --app-name=Roblox "--icon=$HERE/compat/roblox-linux.svg" Roblox 'Roblox is already running.' 2>/dev/null
     echo 'Roblox is already running.' >&2
     exit 1
 fi
 # Roblox updates before launch. ROBLOX_LINUX_UPDATES in DO_NOT_SHARE/config.env: ask (default),
 # auto or off. Offline or unanswered checks launch the installed client.
-updates=$(sed -n 's/^\(export \)\{0,1\}ROBLOX_LINUX_UPDATES=["'"'"']\{0,1\}\([a-z]*\).*/\2/p' "$HERE/DO_NOT_SHARE/config.env" 2>/dev/null | tail -n 1) || updates=
-updates=${ROBLOX_LINUX_UPDATES:-${updates:-ask}}
+updates=$(setting ROBLOX_LINUX_UPDATES ask)
 if [ "$updates" = ask ] || [ "$updates" = auto ]; then
     latest=$(timeout 15 sh "$HERE/run.sh" --client-version 2>/dev/null | sed -n '/^version-[0-9a-f][0-9a-f]*$/p') || latest=
     installed=$(cat "$HERE/RobloxVersion/.version" 2>/dev/null) || installed=
@@ -132,6 +158,14 @@ if [ "$updates" = ask ] || [ "$updates" = auto ]; then
         esac
     fi
 fi
-# Discord Rich Presence, server location and GameMode (see compat/companion.py); it exits with us.
-[ -f "$HERE/compat/companion.py" ] && python3 -I "$HERE/compat/companion.py" "$HERE" "$$" </dev/null &
+# Darling's iokitd crash-loops during a new prefix's first boot and can take Roblox down with it.
+# Boot it once without Roblox; later boots are unaffected.
+if [ ! -d "$HERE/DO_NOT_SHARE/prefix" ]; then
+    command -v notify-send >/dev/null && notify-send --app-name=Roblox "--icon=$HERE/compat/roblox-linux.svg" Roblox 'Setting up for the first launch...' 2>/dev/null
+    "$HERE/RobloxLinux.AppImage" --shell true >/dev/null 2>&1 || true
+    flock -w 60 "$HERE/DO_NOT_SHARE/instance.lock" true || true
+fi
+# Discord Rich Presence, server location, GameMode and a pending browser link (see
+# compat/companion.py); it exits with us.
+[ -f "$HERE/compat/companion.py" ] && python3 -I "$HERE/compat/companion.py" "$HERE" "$$" ${link:+"$link"} </dev/null &
 exec "$HERE/RobloxLinux.AppImage" --debug "$@"

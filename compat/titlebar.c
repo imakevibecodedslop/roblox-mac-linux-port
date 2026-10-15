@@ -7,6 +7,8 @@
 // haptics stay unavailable exactly as before. Plain C against the objc runtime; no SDK needed.
 // Rebuild with compat/build.sh.
 
+#include "macho.h"
+
 typedef struct objc_class *Class;
 typedef struct objc_selector *SEL;
 typedef struct objc_object *id;
@@ -22,15 +24,6 @@ SEL sel_registerName(const char *name);
 void *class_getInstanceMethod(Class cls, SEL sel);
 BOOL class_addMethod(Class cls, SEL sel, IMP imp, const char *types);
 void objc_msgSend_stret(void);
-long write(int fd, const void *buf, unsigned long count);
-
-static void say(const char *message)
-{
-    unsigned long length = 0;
-    while (message[length])
-        length++;
-    write(2, message, length);
-}
 
 // The window manager draws the real titlebar, so these only need to remember what was asked.
 static BOOL titlebar_transparent;
@@ -85,44 +78,10 @@ static id effective_appearance(id self, SEL cmd) { return 0; }
 // through the code that registers the flag (lea rdi, "name"; lea rsi, flag; mov edx, 1), so no
 // addresses are hard-coded; if that pattern is not found exactly once, nothing is touched.
 
-struct mach_header_64 { unsigned magic, cputype, cpusubtype, filetype, ncmds, sizeofcmds, flags, reserved; };
-struct segment_command_64 { unsigned cmd, cmdsize; char segname[16]; unsigned long vmaddr, vmsize, fileoff, filesize; int maxprot, initprot; unsigned nsects, flags; };
-struct section_64 { char sectname[16], segname[16]; unsigned long addr, size; unsigned offset, align, reloff, nreloc, flags, reserved1, reserved2, reserved3; };
-
-const struct mach_header_64 *_dyld_get_image_header(unsigned image_index);
-long _dyld_get_image_vmaddr_slide(unsigned image_index);
 int pthread_create(void *thread, const void *attr, void *(*start)(void *), void *arg);
 int usleep(unsigned microseconds);
 
 static const char FLAG_NAME[] = "CustomTitleBarM1Enabled";
-
-static int same(const char *a, const char *b, unsigned long n)
-{
-    while (n--)
-        if (*a++ != *b++)
-            return 0;
-    return 1;
-}
-
-static const struct section_64 *find_section(const struct mach_header_64 *header, const char *name)
-{
-    // Compare through the name's terminator; section names shorter than 16 bytes are NUL-padded.
-    unsigned long length = 0;
-    while (name[length++])
-        ;
-    const char *command = (const char *)(header + 1);
-    for (unsigned i = 0; i < header->ncmds; i++) {
-        const struct segment_command_64 *segment = (const void *)command;
-        if (segment->cmd == 0x19 && same(segment->segname, "__TEXT", 7)) {
-            const struct section_64 *section = (const void *)(segment + 1);
-            for (unsigned j = 0; j < segment->nsects; j++, section++)
-                if (same(section->sectname, name, length))
-                    return section;
-        }
-        command += segment->cmdsize;
-    }
-    return 0;
-}
 
 static int rip_target(const unsigned char *instruction, unsigned length, const unsigned char *target)
 {

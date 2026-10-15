@@ -14,6 +14,9 @@ Compared with the last original release (2026-09-25), this version:
 - Shows your current game on Discord, notifies you where the game server is, runs Feral GameMode
   while you play, and tells you why Roblox closed when it crashes.
 - Saves screenshots to `~/Pictures/Roblox` and recordings to `~/Videos/Roblox`.
+- Opens Play buttons and other Roblox links from your browser, including while Roblox is running.
+- Fixes two crashes in Darling: one during the very first launch, and one in its audio code
+  that closed Roblox mid-game.
 
 ## Requirements
 
@@ -41,8 +44,10 @@ sh update-roblox.sh   # downloads the official client and prepares shaders; take
 sh run.sh
 ```
 
-The first `run.sh` adds **Roblox (Linux)** to your application menu. Later launches can start from
-there; later updates are offered automatically before launch.
+The first `run.sh` adds **Roblox (Linux)** to your application menu and makes it the handler for
+Roblox links in your browser. Later launches can start from there; later updates are offered
+automatically before launch. The very first launch boots Darling once on its own, which takes
+about ten seconds.
 
 ## Settings
 
@@ -54,6 +59,7 @@ ROBLOX_LINUX_UPDATES=ask      # ask, auto or off
 ROBLOX_LINUX_DISCORD=1        # Discord Rich Presence
 ROBLOX_LINUX_SERVER_NOTIFY=1  # server location, looked up with ipinfo.io
 ROBLOX_LINUX_GAMEMODE=1       # Feral GameMode while Roblox runs
+ROBLOX_LINUX_LINKS=1          # open roblox: and roblox-player: links here; 0 hands them back
 ```
 
 `FFlags.json` holds Roblox flag overrides and starts empty. Roblox decides which flags it accepts,
@@ -74,6 +80,9 @@ about both:
   memory. That setting is Roblox's titlebar experiment, which draws a second title strip
   under the real titlebar.
 
+`compat/audio.c` changes Darling's AudioToolbox, not Roblox: stopping an audio unit that is already
+closed returns an error, as on macOS, instead of crashing.
+
 ## Troubleshooting
 
 - `sh run.sh --diagnose` writes a system report without starting Roblox.
@@ -83,6 +92,8 @@ about both:
 - A Roblox update can start calling another macOS function that Darling lacks. The crash
   notification then shows `unrecognized selector sent to instance`. Missing methods are added in
   `compat/titlebar.c`.
+- Crashes inside Darling leave a register dump in `DO_NOT_SHARE/crashes/fatal.log`; the crash
+  notification points there when that happens.
 
 ## How it is put together
 
@@ -92,9 +103,10 @@ about both:
 | `run.sh` | Launcher: desktop integration, update prompt, then the AppImage. |
 | `update-roblox.sh` | Downloads the official client into `RobloxVersion/`. |
 | `compat/titlebar.c` | macOS window functions Darling lacks, loaded into the client as `CoreHaptics.framework`. |
-| `compat/companion.py` | Discord, server location, GameMode and crash notifications. Reads Roblox's logs. |
+| `compat/audio.c` | Guard against Darling's AudioToolbox crash on closed audio units; same framework. |
+| `compat/companion.py` | Discord, server location, GameMode, crash notifications and pending browser links. Reads Roblox's logs. |
 | `compat/settings.py` | The Settings window. |
-| `compat/ui-helper-decorations.patch` | Change to the AppImage's window helper: no GTK titlebar, browser toolbar. |
+| `compat/ui-helper.patch` | Change to the AppImage's window helper: no GTK titlebar, browser toolbar, and a socket that passes browser links to a running Roblox. |
 
 ## Building
 
@@ -104,7 +116,7 @@ SDK). The release archive already contains it.
 The AppImage is the 2026-09-25 original with its UI helper (`optimized/ui/libroblox-wayland.so`)
 rebuilt from the source snapshot
 [georgenoob1234/Roblox-Mac-Linux-Port@69908c3](https://github.com/georgenoob1234/Roblox-Mac-Linux-Port/tree/69908c3bff1176e6edcf2f869f75ebbb984cf97a/RobloxLinuxDev)
-with `compat/ui-helper-decorations.patch`:
+with `compat/ui-helper.patch`:
 
 1. Apply the patch inside `RobloxLinuxDev`.
 2. Fetch the pinned ImGui and Vulkan-Headers archives listed in `third_party/dependencies.json`.
