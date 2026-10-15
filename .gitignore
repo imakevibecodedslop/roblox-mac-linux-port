@@ -1,0 +1,11 @@
+# Never commit or share your Roblox session, settings, logs or caches.
+DO_NOT_SHARE/
+
+# The AppImage and the downloaded Roblox client are not kept in Git.
+*.AppImage
+*.AppImage.backup-*
+/RobloxVersion/
+
+# Built by compat/build.sh and tools/make-release.sh.
+/compat/frameworks/
+/dist/

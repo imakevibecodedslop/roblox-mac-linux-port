@@ -1,0 +1,118 @@
+appdir
+base
+downloads
+fork
+libroblox-wayland.shipped.so
+patched
+RobloxLinux.AppImage.new
+--- a/runtime/browser/host.cpp
++++ b/runtime/browser/host.cpp
+@@ -14,7 +14,8 @@
+ #include <map>
+ #include "client-url.h"
+ 
+-static GtkWidget *window,*header,*stack,*socket_view,*back,*forward,*reload,*done;
++// The window manager draws the titlebar; the browser controls live in a toolbar shown only while browsing.
++static GtkWidget *window,*toolbar,*stack,*socket_view,*back,*forward,*reload,*done;
+ static GSubprocess *guest;
+ static WebKitWebContext *context;
+ static std::string browser_data;
+@@ -107,17 +108,20 @@
+ static void controls() {
+     bool browsing=current!=nullptr;
+     bool panel=browsing && !current->panel_title.empty();
++    gtk_widget_set_visible(toolbar,browsing);
+     for(auto w:{back,forward,reload})gtk_widget_set_visible(w,browsing && !panel);
+     gtk_widget_set_visible(done,browsing);gtk_button_set_label(GTK_BUTTON(done),panel?"Close":"Back to Roblox");
+     if(browsing) {
+         gtk_widget_set_sensitive(back,webkit_web_view_can_go_back(current->view));
+         gtk_widget_set_sensitive(forward,webkit_web_view_can_go_forward(current->view));
+         const char *title=panel?current->panel_title.c_str():webkit_web_view_get_title(current->view);
+-        gtk_header_bar_set_title(GTK_HEADER_BAR(header),title && *title?title:"Roblox — Browser");
+         const char *url=webkit_web_view_get_uri(current->view);GUri *uri=url?g_uri_parse(url,G_URI_FLAGS_NONE,nullptr):nullptr;
+-        gtk_header_bar_set_subtitle(GTK_HEADER_BAR(header),!panel && uri?g_uri_get_host(uri):nullptr);
++        const char *host=!panel && uri?g_uri_get_host(uri):nullptr;
++        std::string text=title && *title?title:"Roblox — Browser";
++        if(host && *host)text+=std::string(" — ")+host;
++        gtk_window_set_title(GTK_WINDOW(window),text.c_str());
+         if(uri)g_uri_unref(uri);
+-    } else {gtk_header_bar_set_title(GTK_HEADER_BAR(header),"Roblox");gtk_header_bar_set_subtitle(GTK_HEADER_BAR(header),nullptr);}
++    } else gtk_window_set_title(GTK_WINDOW(window),"Roblox");
+ }
+ static void return_to_game(GtkWidget*,gpointer) {
+     if(current)send_object(event(current,"closed"));
+@@ -354,31 +358,25 @@
+     g_setenv("ROBLOX_MAC_WEBKIT_USER_AGENT",webkit_settings_get_user_agent(settings),TRUE);g_object_unref(settings);
+     if(native_wayland)g_printerr("WAYLAND WebKit settings initialized\n");
+     window=gtk_window_new(GTK_WINDOW_TOPLEVEL);gtk_window_set_title(GTK_WINDOW(window),"Roblox");gtk_window_set_default_size(GTK_WINDOW(window),1100,800);
+-    header=gtk_header_bar_new();gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header),!native_wayland);gtk_window_set_titlebar(GTK_WINDOW(window),header);
++    toolbar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);gtk_container_set_border_width(GTK_CONTAINER(toolbar),4);
++    gtk_style_context_add_class(gtk_widget_get_style_context(toolbar),"primary-toolbar");gtk_widget_set_no_show_all(toolbar,TRUE);
+     // The host's Glycin image-loader subprocess hangs inside the Darwin process
+     // during symbolic-icon decoding. GTK text buttons need no image loader;
+     // keep WebKit's normal image handling and sandbox unchanged.
+     back=native_wayland?gtk_button_new_with_label("←"):gtk_button_new_from_icon_name("go-previous-symbolic",GTK_ICON_SIZE_BUTTON);
+     forward=native_wayland?gtk_button_new_with_label("→"):gtk_button_new_from_icon_name("go-next-symbolic",GTK_ICON_SIZE_BUTTON);
+     reload=native_wayland?gtk_button_new_with_label("↻"):gtk_button_new_from_icon_name("view-refresh-symbolic",GTK_ICON_SIZE_BUTTON);done=gtk_button_new_with_label("Back to Roblox");
+-    if(native_wayland) {
+-        auto close=gtk_button_new_with_label("×"),maximize=gtk_button_new_with_label("□"),minimize=gtk_button_new_with_label("−");
+-        for(auto item:{std::pair{close,"Close"},std::pair{maximize,"Maximize or restore"},std::pair{minimize,"Minimize"}}) {
+-            gtk_widget_set_tooltip_text(item.first,item.second);atk_object_set_name(gtk_widget_get_accessible(item.first),item.second);
+-            gtk_widget_set_can_focus(item.first,FALSE);gtk_header_bar_pack_end(GTK_HEADER_BAR(header),item.first);
+-        }
+-        g_signal_connect(close,"clicked",G_CALLBACK(+[](GtkWidget*,gpointer){request_close();}),nullptr);
+-        g_signal_connect(maximize,"clicked",G_CALLBACK(+[](GtkWidget*,gpointer){if(gtk_window_is_maximized(GTK_WINDOW(window)))gtk_window_unmaximize(GTK_WINDOW(window));else gtk_window_maximize(GTK_WINDOW(window));}),nullptr);
+-        g_signal_connect(minimize,"clicked",G_CALLBACK(+[](GtkWidget*,gpointer){gtk_window_iconify(GTK_WINDOW(window));}),nullptr);
+-    }
+-    for(auto w:{back,forward,reload})gtk_header_bar_pack_start(GTK_HEADER_BAR(header),w);
+-    gtk_header_bar_pack_end(GTK_HEADER_BAR(header),done);
++    for(auto w:{back,forward,reload})gtk_box_pack_start(GTK_BOX(toolbar),w,FALSE,FALSE,0);
++    gtk_box_pack_end(GTK_BOX(toolbar),done,FALSE,FALSE,0);
++    for(auto w:{back,forward,reload,done})gtk_widget_show(w);
+     gtk_widget_set_tooltip_text(back,"Back");gtk_widget_set_tooltip_text(forward,"Forward");gtk_widget_set_tooltip_text(reload,"Reload");
+     g_signal_connect(back,"clicked",G_CALLBACK(+[](GtkWidget*,gpointer){if(current)webkit_web_view_go_back(current->view);}),nullptr);
+     g_signal_connect(forward,"clicked",G_CALLBACK(+[](GtkWidget*,gpointer){if(current)webkit_web_view_go_forward(current->view);}),nullptr);
+     g_signal_connect(reload,"clicked",G_CALLBACK(+[](GtkWidget*,gpointer){if(current)webkit_web_view_reload(current->view);}),nullptr);
+     g_signal_connect(done,"clicked",G_CALLBACK(return_to_game),nullptr);
+-    stack=gtk_stack_new();socket_view=native_wayland?gtk_drawing_area_new():gtk_socket_new();gtk_stack_add_named(GTK_STACK(stack),socket_view,"game");gtk_container_add(GTK_CONTAINER(window),stack);
++    stack=gtk_stack_new();socket_view=native_wayland?gtk_drawing_area_new():gtk_socket_new();gtk_stack_add_named(GTK_STACK(stack),socket_view,"game");
++    auto content=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_box_pack_start(GTK_BOX(content),toolbar,FALSE,FALSE,0);
++    gtk_box_pack_start(GTK_BOX(content),stack,TRUE,TRUE,0);gtk_container_add(GTK_CONTAINER(window),content);
+     if(!native_wayland)g_signal_connect(socket_view,"plug-removed",G_CALLBACK(+[](GtkSocket*,gpointer)->gboolean{return TRUE;}),nullptr);
+     g_signal_connect(window,"delete-event",G_CALLBACK(closed),nullptr);
+     if(native_wayland)g_printerr("WAYLAND widgets initialized\n");
+--- a/runtime/browser/wayland.cpp
++++ b/runtime/browser/wayland.cpp
+@@ -78,9 +78,11 @@
+     // Keep the game in its native subsurface. GTK composites only the HUD
+     // above it, without forcing a Vulkan -> GL game copy or EGL swap.
+     auto overlay=gtk_overlay_new();
+-    g_object_ref(stack);gtk_container_remove(GTK_CONTAINER(window),stack);
++    // The stack sits in a box below the browser toolbar; the overlay takes its place there.
++    auto content=gtk_widget_get_parent(stack);
++    g_object_ref(stack);gtk_container_remove(GTK_CONTAINER(content),stack);
+     gtk_container_add(GTK_CONTAINER(overlay),stack);g_object_unref(stack);
+-    gtk_container_add(GTK_CONTAINER(window),overlay);
++    gtk_box_pack_start(GTK_BOX(content),overlay,TRUE,TRUE,0);
+     profiler_area=gtk_gl_area_new();
+     gtk_gl_area_set_required_version(GTK_GL_AREA(profiler_area),3,3);
+     gtk_gl_area_set_has_alpha(GTK_GL_AREA(profiler_area),TRUE);
+@@ -453,15 +455,15 @@
+                 wl_display_flush(display);
+             }
+             break;
+-        case RBX_WL_TITLE:gtk_header_bar_set_title(GTK_HEADER_BAR(header),text?text:"Roblox");break;
++        case RBX_WL_TITLE:gtk_window_set_title(GTK_WINDOW(window),text?text:"Roblox");break;
+         case RBX_WL_RESIZE_WINDOW:
+             gtk_window_resize(GTK_WINDOW(window),std::max(1,(int)x),std::max(1,(int)y));
+             // Tiled compositors can reject a requested size without a new GTK
+             // allocation. Correct the guest's optimistic size on the next poll.
+             resize_report_pending=(std::max(1,(int)x)!=content_width || std::max(1,(int)y)!=content_height);break;
+         case RBX_WL_FULLSCREEN:
+-            if(x){gtk_widget_hide(header);gtk_window_fullscreen(GTK_WINDOW(window));}
+-            else {gtk_window_unfullscreen(GTK_WINDOW(window));gtk_widget_show(header);}break;
++            if(x)gtk_window_fullscreen(GTK_WINDOW(window));
++            else gtk_window_unfullscreen(GTK_WINDOW(window));break;
+         case RBX_WL_LOCK:
+             refresh_pointer_focus();pointer_capture.request(x!=0);
+             if(!x)commit_capture_hint();
