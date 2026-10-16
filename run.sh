@@ -197,6 +197,11 @@ if [ -n "$play" ]; then
     set -- -protocolString "$link"
     link=
 fi
+# Appearance options from the settings window (cursor, sounds, fonts, emoji, avatar background):
+# compat/presets.py copies them into the client, or puts Roblox's own files back.
+if [ -f "$HERE/compat/presets.py" ] && ! python3 -I "$HERE/compat/presets.py" apply "$HERE"; then
+    notify 'Some appearance options could not be applied this time.'
+fi
 # Discord Rich Presence, server location, GameMode and a pending roblox: link (see
 # compat/companion.py); it exits with us.
 [ -f "$HERE/compat/companion.py" ] && python3 -I "$HERE/compat/companion.py" "$HERE" "$$" ${link:+"$link"} </dev/null &

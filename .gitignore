@@ -9,3 +9,6 @@ DO_NOT_SHARE/
 # Built by compat/build.sh and tools/make-release.sh.
 /compat/frameworks/
 /dist/
+
+# Python bytecode.
+__pycache__/

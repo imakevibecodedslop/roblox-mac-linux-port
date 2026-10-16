@@ -13,9 +13,11 @@ mkdir -p "$STAGE/compat" "$OUT"
 cp "$REPO/run.sh" "$REPO/update-roblox.sh" "$REPO/FFlags.json" "$REPO/README.md" "$REPO/THIRD_PARTY.md" \
     "$REPO/.gitignore" "$STAGE/"
 cp -r "$REPO/licenses" "$REPO/docs" "$STAGE/"
-for file in titlebar.c audio.c macho.h build.sh companion.py settings.py roblox-linux.svg ui-helper.patch metal2vulkan.patch; do
+for file in titlebar.c audio.c macho.h build.sh companion.py settings.py presets.py roblox-linux.svg ui-helper.patch \
+    metal2vulkan.patch; do
     cp "$REPO/compat/$file" "$STAGE/compat/"
 done
+cp -r "$REPO/compat/presets" "$STAGE/compat/"
 sh "$STAGE/compat/build.sh" >/dev/null
 install -m 755 "$APPIMAGE" "$STAGE/RobloxLinux.AppImage"
 tar --owner=0 --group=0 --numeric-owner -czf "$OUT/RobloxLinuxRelease.tar.gz" -C "$work" RobloxLinuxRelease

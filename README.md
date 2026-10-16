@@ -22,6 +22,8 @@ Compared with the last original release (2026-09-25), this version:
   that closed Roblox mid-game.
 - Translates all of Roblox's shaders to Vulkan. The original translator rejected 12 lighting
   shaders, which could leave parts of some games drawn wrong.
+- Has Bloxstrap's appearance options: the 2006 or 2013 mouse cursor, old character sounds, the
+  old avatar editor background, a custom font and other emoji.
 
 ## Requirements
 
@@ -66,7 +68,18 @@ ROBLOX_LINUX_DISCORD=1        # Discord Rich Presence
 ROBLOX_LINUX_SERVER_NOTIFY=1  # server location, looked up with ipinfo.io
 ROBLOX_LINUX_GAMEMODE=1       # Feral GameMode while Roblox runs
 ROBLOX_LINUX_LINKS=1          # open roblox: and roblox-player: links here; 0 hands them back
+ROBLOX_LINUX_CURSOR=default   # mouse cursor: default, 2006 or 2013
+ROBLOX_LINUX_OLD_SOUNDS=0     # 2014 character sounds
+ROBLOX_LINUX_OLD_AVATAR_BACKGROUND=0
+ROBLOX_LINUX_EMOJI=default    # default, catmoji, windows11, windows10 or windows8
 ```
+
+The Appearance tab's options come from Bloxstrap and work the same way: they replace files inside
+the installed client, never its code, and use no Roblox flags. Each replaced file's original is
+kept in `RobloxVersion/.presets-original/`, so turning an option off restores it, and a Roblox
+update starts from clean files that get the options again on the next launch. Other emoji fonts
+are downloaded from Bloxstrap's GitHub release when chosen and checked against known checksums;
+a custom font is copied to `DO_NOT_SHARE/presets/`.
 
 A Play button (`roblox-player:` link) restarts Roblox if it is already open: the Mac client handles
 these links in a new process, and that process signs in with the ticket in the link. `roblox:`
@@ -116,6 +129,7 @@ closed returns an error, as on macOS, instead of crashing.
 | `compat/audio.c` | Guard against Darling's AudioToolbox crash on closed audio units; same framework. |
 | `compat/companion.py` | Discord, server location, GameMode, crash notifications and pending browser links. Reads Roblox's logs. |
 | `compat/settings.py` | The Settings window. |
+| `compat/presets.py`, `compat/presets/` | The Appearance options and Bloxstrap's cursor, sound and avatar background files. |
 | `compat/metal2vulkan.patch` | Fix to the shader translator: reads of a `float3` array as `float4`, which Metal allows. |
 | `compat/ui-helper.patch` | Change to the AppImage's window helper: no GTK titlebar, browser toolbar, and a socket that passes browser links to a running Roblox. |
 

@@ -28,3 +28,13 @@ GTK, WebKitGTK, SDL, PulseAudio, EGL and Vulkan host libraries are external
 build/runtime dependencies; they are not included in this Git source snapshot.
 Binary packaging has additional dependency/license requirements. No Roblox,
 macOS SDK binary, game asset, captured AIR or SPIR-V corpus is included here.
+
+## Appearance presets
+
+`compat/presets/` holds the cursor images, character sounds and old avatar editor background from
+Bloxstrap's `Bloxstrap/Resources/Mods` at commit
+[02db760](https://github.com/bloxstraplabs/bloxstrap/tree/02db76006741f039b79ac7547b8054d7f3ccfc05)
+(MIT; see `licenses/Bloxstrap.txt`). They are older Roblox assets as Bloxstrap ships them.
+`sounds/Empty.ogg` is 0.1 s of silence made with FFmpeg. The emoji fonts are not included: they
+are downloaded from https://github.com/bloxstraplabs/rbxcustom-fontemojis when a user chooses
+one, and remain under their owners' terms.
