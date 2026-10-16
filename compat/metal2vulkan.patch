@@ -1,0 +1,82 @@
+diff --git a/src/native/emitter/body/vector_store.rs b/src/native/emitter/body/vector_store.rs
+index d3b343b..e2d0536 100644
+--- a/src/native/emitter/body/vector_store.rs
++++ b/src/native/emitter/body/vector_store.rs
+@@ -1178,7 +1178,17 @@ impl Emitter {
+                     if bitcast_width(&vector_ty).is_some()
+                         && bitcast_width(&vector_ty) == bitcast_width(result_ty)
+             );
+-        if !direct && !bitcast {
++        // Widening case: a four-lane load of a leading three-lane vector of the same element type,
++        // e.g. `<4 x float>` from a `[8 x <3 x float>]` local. Metal stores a three-lane vector in
++        // four lanes' space (`float3` is 16 bytes), so the load reads the three lanes plus padding;
++        // rebuild it from the three lanes and a zero padding lane.
++        let widen = !direct
++            && !bitcast
++            && matches!(
++                (&vector_ty, result_ty),
++                (LlType::Vector(have, 3), LlType::Vector(want, 4)) if types_compatible(have, want)
++            );
++        if !direct && !bitcast && !widen {
+             return Ok(false);
+         }
+ 
+@@ -1211,6 +1221,25 @@ impl Emitter {
+                 Some(result),
+                 vec![Operand::IdRef(vector_ptr)],
+             ));
++        } else if widen {
++            let LlType::Vector(element, _) = &vector_ty else {
++                unreachable!("widen requires a vector")
++            };
++            let vector_type = self.type_id(&vector_ty)?;
++            let loaded = self.fresh();
++            instructions.push(Self::inst(
++                Op::Load,
++                Some(vector_type),
++                Some(loaded),
++                vec![Operand::IdRef(vector_ptr)],
++            ));
++            let padding = self.const_null(element)?;
++            instructions.push(Self::inst(
++                Op::CompositeConstruct,
++                Some(result_type),
++                Some(result),
++                vec![Operand::IdRef(loaded), Operand::IdRef(padding)],
++            ));
+         } else {
+             // Load the leading vector in its own type, then bitcast lane-for-lane to the result.
+             let vector_type = self.type_id(&vector_ty)?;
+diff --git a/src/native/tests/buffers.rs b/src/native/tests/buffers.rs
+index 03022b4..645af67 100644
+--- a/src/native/tests/buffers.rs
++++ b/src/native/tests/buffers.rs
+@@ -7547,6 +7547,28 @@ entry:
+     assert!(!asm.contains("OpBitcast %_ptr_"), "{asm}");
+ }
+ 
++/// Loading a `<4 x float>` from a `[8 x <3 x float>]` local reads the leading `float3` and its padding
++/// lane (Metal stores `float3` in 16 bytes): load element 0 as `<3 x float>` and widen it. Roblox's
++/// fragment shaders 2018-2032 failed with "cannot reinterpret load … Array(Vector(Float, 3), 8) to
++/// Vector(Float, 4)" before this.
++#[test]
++fn native_leading_vector_aggregate_load_widens_three_lanes_to_four() {
++    let ll = r#"
++target triple = "spirv-unknown-vulkan1.2"
++define <4 x float> @load_leading_vec_widened() {
++entry:
++  %buf = alloca [8 x <3 x float>], align 16
++  %v = load <4 x float>, ptr %buf, align 16
++  ret <4 x float> %v
++}
++"#;
++    let asm = disassemble(&emit_vulkan_spirv(ll).expect("native emit")).expect("disassemble");
++    assert!(asm.contains("OpInBoundsAccessChain"), "{asm}");
++    assert!(asm.contains("OpCompositeConstruct"), "{asm}");
++    assert!(asm.contains("OpConstantNull"), "{asm}");
++    assert!(!asm.contains("OpBitcast %_ptr_"), "{asm}");
++}
++
+ #[test]
+ fn native_scalar_array_load_rebuilds_same_shape_vector() {
+     let ll = r#"

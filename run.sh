@@ -145,6 +145,11 @@ if [ ! -x "$HERE/RobloxVersion/RobloxPlayer.app/Contents/MacOS/RobloxPlayer" ]; 
         exit 1
     fi
     flock -w 60 "$HERE/DO_NOT_SHARE/instance.lock" true || true
+# The AppImage holds the shader translator; prepare shaders again after it changes.
+elif [ "$(cat "$HERE/RobloxVersion/.prepared-with" 2>/dev/null || true)" != "$(stat -c '%s-%Y' "$HERE/RobloxLinux.AppImage")" ]; then
+    notify "Preparing Roblox's shaders for this version of the launcher. This takes about a minute."
+    sh "$HERE/update-roblox.sh" --shaders || notify 'Shader preparation failed; Roblox starts with the shaders it had.'
+    flock -w 60 "$HERE/DO_NOT_SHARE/instance.lock" true || true
 fi
 # Roblox updates before launch. ROBLOX_LINUX_UPDATES in DO_NOT_SHARE/config.env: ask (default),
 # auto or off. Offline or unanswered checks launch the installed client.

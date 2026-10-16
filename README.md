@@ -18,6 +18,8 @@ Compared with the last original release (2026-09-25), this version:
   A Play button signs Roblox in as the account your browser is using, so it switches accounts.
 - Fixes two crashes in Darling: one during the very first launch, and one in its audio code
   that closed Roblox mid-game.
+- Translates all of Roblox's shaders to Vulkan. The original translator rejected 12 lighting
+  shaders, which could leave parts of some games drawn wrong.
 
 ## Requirements
 
@@ -47,7 +49,9 @@ The first launch downloads the official client and prepares its shaders, which t
 minutes, then boots Darling once on its own before starting Roblox. It also adds
 **Roblox (Linux)** to your application menu and makes it the handler for Roblox links in your
 browser. Later launches can start from the menu, and new Roblox versions are offered before
-launch. `sh update-roblox.sh` updates by hand.
+launch. `sh update-roblox.sh` updates by hand, and `sh update-roblox.sh --shaders` prepares the
+installed client's shaders again. That also happens by itself the first time a new AppImage starts,
+because the shader translator lives in the AppImage.
 
 ## Settings
 
@@ -110,6 +114,7 @@ closed returns an error, as on macOS, instead of crashing.
 | `compat/audio.c` | Guard against Darling's AudioToolbox crash on closed audio units; same framework. |
 | `compat/companion.py` | Discord, server location, GameMode, crash notifications and pending browser links. Reads Roblox's logs. |
 | `compat/settings.py` | The Settings window. |
+| `compat/metal2vulkan.patch` | Fix to the shader translator: reads of a `float3` array as `float4`, which Metal allows. |
 | `compat/ui-helper.patch` | Change to the AppImage's window helper: no GTK titlebar, browser toolbar, and a socket that passes browser links to a running Roblox. |
 
 ## Building
@@ -130,8 +135,14 @@ with `compat/ui-helper.patch`:
    wrapper script first in `PATH` does it), so the helper runs on glibc 2.39 and build paths stay
    out of the binary. Needed packages: the GTK 3, WebKitGTK 4.1, json-glib, SDL3, Wayland, Xcursor
    and EGL/GL development packages.
-5. Replace the helper with `tools/repack-appimage.sh ORIGINAL.AppImage libroblox-wayland.so OUTPUT.AppImage`.
-6. Package with `tools/make-release.sh RobloxLinux.AppImage dist/`.
+5. Build the shader translator: check out
+   [steelbrain/metal2vulkan](https://github.com/steelbrain/metal2vulkan) at the commit pinned in
+   `third_party/dependencies.json`, apply `third_party/patches/metal2vulkan.patch` and then
+   `compat/metal2vulkan.patch`, copy `third_party/metal2vulkan-Cargo.lock` to `Cargo.lock`, and run
+   `cargo build --release --locked --features serde --bin metal2vulkan`. Pass
+   `--remap-path-prefix` in `RUSTFLAGS` to keep build paths out of the binary.
+6. Replace both with `tools/repack-appimage.sh ORIGINAL.AppImage libroblox-wayland.so metal2vulkan OUTPUT.AppImage`.
+7. Package with `tools/make-release.sh RobloxLinux.AppImage dist/`.
 
 The helper links the C++ runtime dynamically against the AppImage's bundled libstdc++ and needs at
 most GLIBCXX 3.4.29 and GLIBC 2.38, the same as the original helper.
