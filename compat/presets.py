@@ -111,10 +111,11 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def write_atomically(path, data):
+def write_atomically(path, data, mode=0o644):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f'.{path.name}.presets-tmp')
     temporary.write_bytes(data)
+    os.chmod(temporary, mode)
     os.replace(temporary, path)
 
 
@@ -162,11 +163,12 @@ class Client:
         if relative not in self.replaced:
             existed = target.is_file()
             if existed:
-                write_atomically(self.originals / relative, target.read_bytes())
+                # The backup keeps the file's permissions, so restoring it gives back the same file.
+                write_atomically(self.originals / relative, target.read_bytes(), target.stat().st_mode & 0o777)
             self.replaced[relative] = existed
             self.save()
         if not target.is_file() or target.read_bytes() != data:
-            write_atomically(target, data)
+            write_atomically(target, data, target.stat().st_mode & 0o777 if target.is_file() else 0o644)
 
     def restore(self, relative):
         target = self.resources / relative
