@@ -6,6 +6,40 @@ Runs the official Intel macOS Roblox client on x86_64 Linux through Darling, wit
 to Vulkan. This is a continuation of spidercraft's Roblox-Mac-Linux-Port, whose repository was
 deleted. It is unofficial and not affiliated with Roblox.
 
+## Install
+
+1. Download `RobloxLinuxRelease.tar.gz` from the
+   [latest release](https://github.com/imakevibecodedslop/roblox-mac-linux-port/releases/latest).
+2. Extract it to a short path. Darling fails when its socket paths get too long, and the launcher
+   tells you when a folder is too deep.
+   ```sh
+   tar -xzf RobloxLinuxRelease.tar.gz -C ~
+   ```
+3. Start it:
+   ```sh
+   sh ~/RobloxLinuxRelease/run.sh
+   ```
+
+The first launch downloads the official client and prepares its shaders, which takes a few
+minutes, then boots Darling once on its own before starting Roblox. It also adds
+**Roblox (Linux)** to your application menu and makes it the handler for Roblox links in your
+browser, so later launches can start from the menu or from Play buttons on roblox.com.
+
+New Roblox versions are offered before launch. `sh update-roblox.sh` updates by hand, and
+`sh update-roblox.sh --shaders` prepares the installed client's shaders again; that also happens by
+itself the first time a new AppImage starts, because the shader translator lives in the AppImage.
+
+## Requirements
+
+- x86_64 Linux with glibc 2.39 or newer (Ubuntu 24.04, Fedora 40 or newer) and a Wayland desktop.
+- Vulkan drivers, Python 3, util-linux, curl and unzip.
+- Unprivileged user namespaces.
+
+Optional: PyGObject (GTK 3) for the Settings window, kdialog or zenity for the update prompt,
+`notify-send` for notifications, Feral GameMode, and Discord for Rich Presence.
+
+## Changes from the original release
+
 Compared with the last original release (2026-09-25), this version:
 
 - Uses your desktop's own titlebar, GTK theme and cursor instead of a fixed Adwaita look.
@@ -25,54 +59,28 @@ Compared with the last original release (2026-09-25), this version:
 - Has Bloxstrap's appearance options: the 2006 or 2013 mouse cursor, old character sounds, the
   old avatar editor background, a custom font and other emoji.
 
-## Requirements
-
-- x86_64 Linux with glibc 2.39 or newer (Ubuntu 24.04, Fedora 40 or newer) and a Wayland desktop.
-- Vulkan drivers, Python 3, util-linux, curl and unzip.
-- Unprivileged user namespaces.
-
-Optional:
-
-- PyGObject (GTK 3) for the Settings window.
-- kdialog or zenity for the update prompt.
-- `notify-send` for notifications.
-- Feral GameMode.
-- Discord, for Rich Presence.
-
-## Install
-
-Download `RobloxLinuxRelease.tar.gz` from the Releases page. Keep it in a short path such as
-`~/RobloxLinuxRelease`; Darling can fail when socket paths get too long.
-
-```sh
-tar -xzf RobloxLinuxRelease.tar.gz -C ~
-sh ~/RobloxLinuxRelease/run.sh
-```
-
-The first launch downloads the official client and prepares its shaders, which takes a few
-minutes, then boots Darling once on its own before starting Roblox. It also adds
-**Roblox (Linux)** to your application menu and makes it the handler for Roblox links in your
-browser. Later launches can start from the menu, and new Roblox versions are offered before
-launch. `sh update-roblox.sh` updates by hand, and `sh update-roblox.sh --shaders` prepares the
-installed client's shaders again. That also happens by itself the first time a new AppImage starts,
-because the shader translator lives in the AppImage.
-
 ## Settings
 
-Right-click the menu entry and choose Settings, or run `sh run.sh --settings`. Settings are saved
-in `DO_NOT_SHARE/config.env` and apply on the next launch:
+Right-click the menu entry and choose Settings, or run `sh run.sh --settings`.
 
-```sh
-ROBLOX_LINUX_UPDATES=ask      # ask, auto or off
-ROBLOX_LINUX_DISCORD=1        # Discord Rich Presence
-ROBLOX_LINUX_SERVER_NOTIFY=1  # server location, looked up with ipinfo.io
-ROBLOX_LINUX_GAMEMODE=1       # Feral GameMode while Roblox runs
-ROBLOX_LINUX_LINKS=1          # open roblox: and roblox-player: links here; 0 hands them back
-ROBLOX_LINUX_CURSOR=default   # mouse cursor: default, 2006 or 2013
-ROBLOX_LINUX_OLD_SOUNDS=0     # 2014 character sounds
-ROBLOX_LINUX_OLD_AVATAR_BACKGROUND=0
-ROBLOX_LINUX_EMOJI=default    # default, catmoji, windows11, windows10 or windows8
-```
+![The Settings window: the General tab with updates, browser links, Discord, server location and GameMode, and the Appearance tab with cursor, emoji, font, avatar background and sounds](docs/settings.png)
+
+Settings are saved in `DO_NOT_SHARE/config.env`, one `KEY=value` per line, and apply on the next
+launch. The file can also be edited by hand:
+
+| Key | What it controls | Values |
+|---|---|---|
+| `ROBLOX_LINUX_UPDATES` | New Roblox versions | `ask` (default), `auto`, `off` |
+| `ROBLOX_LINUX_LINKS` | Opening `roblox:` and `roblox-player:` links here; `0` hands them back to the previous app | `1` (default), `0` |
+| `ROBLOX_LINUX_DISCORD` | Discord Rich Presence | `1` (default), `0` |
+| `ROBLOX_LINUX_SERVER_NOTIFY` | A notification with the game server's location, looked up with ipinfo.io | `1` (default), `0` |
+| `ROBLOX_LINUX_GAMEMODE` | Feral GameMode while Roblox runs | `1` (default), `0` |
+| `ROBLOX_LINUX_CURSOR` | Mouse cursor | `default`, `2006`, `2013` |
+| `ROBLOX_LINUX_OLD_SOUNDS` | 2014 character sounds | `0` (default), `1` |
+| `ROBLOX_LINUX_OLD_AVATAR_BACKGROUND` | Old avatar editor background | `0` (default), `1` |
+| `ROBLOX_LINUX_EMOJI` | Emoji font | `default`, `catmoji`, `windows11`, `windows10`, `windows8` |
+
+### Appearance options
 
 The Appearance tab's options come from Bloxstrap and work the same way: they replace files inside
 the installed client, never its code, and use no Roblox flags. Each replaced file's original is
@@ -81,9 +89,13 @@ update starts from clean files that get the options again on the next launch. Ot
 are downloaded from Bloxstrap's GitHub release when chosen and checked against known checksums;
 a custom font is copied to `DO_NOT_SHARE/presets/`.
 
+### Browser links
+
 A Play button (`roblox-player:` link) restarts Roblox if it is already open: the Mac client handles
 these links in a new process, and that process signs in with the ticket in the link. `roblox:`
 links go to the running client without a restart.
+
+### Flags
 
 `FFlags.json` holds Roblox flag overrides and starts empty. Roblox decides which flags it accepts,
 and some flags can get accounts banned, so change it only if you know what a flag does. Press F8
@@ -120,12 +132,13 @@ closed returns an error, as on macOS, instead of crashing.
 | Path | What it does |
 |---|---|
 | `RobloxLinux.AppImage` | Darling, the Metal-to-Vulkan renderer and the GTK/Wayland window. Release download only. |
-| `run.sh` | Launcher: desktop integration, update prompt, then the AppImage. |
+| `run.sh` | Launcher: desktop integration, update prompt, appearance options, then the AppImage. |
 | `update-roblox.sh` | Downloads the official client into `RobloxVersion/`. |
 | `compat/titlebar.c` | macOS window functions Darling lacks, loaded into the client as `CoreHaptics.framework`. |
 | `compat/audio.c` | Guard against Darling's AudioToolbox crash on closed audio units; same framework. |
 | `compat/companion.py` | Discord, server location, GameMode, crash notifications and pending browser links. Reads Roblox's logs. |
 | `compat/settings.py` | The Settings window. |
+| `compat/config.py` | Reads `config.env` the way `run.sh` does, for the Python scripts. |
 | `compat/presets.py`, `compat/presets/` | The Appearance options and Bloxstrap's cursor, sound and avatar background files. |
 | `compat/metal2vulkan.patch` | Fix to the shader translator: reads of a `float3` array as `float4`, which Metal allows. |
 | `compat/ui-helper.patch` | Change to the AppImage's window helper: no GTK titlebar, browser toolbar, and a socket that passes browser links to a running Roblox. |
@@ -134,6 +147,9 @@ closed returns an error, as on macOS, instead of crashing.
 
 `compat/build.sh` builds `compat/frameworks/CoreHaptics.framework` with clang and lld (no macOS
 SDK). The release archive already contains it.
+
+<details>
+<summary>Rebuilding the AppImage</summary>
 
 The AppImage is the 2026-09-25 original with its UI helper (`optimized/ui/libroblox-wayland.so`)
 rebuilt from the source snapshot
@@ -159,6 +175,8 @@ with `compat/ui-helper.patch`:
 
 The helper links the C++ runtime dynamically against the AppImage's bundled libstdc++ and needs at
 most GLIBCXX 3.4.29 and GLIBC 2.38, the same as the original helper.
+
+</details>
 
 ## Credits and licenses
 
