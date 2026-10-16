@@ -15,6 +15,7 @@ Compared with the last original release (2026-09-25), this version:
   while you play, and tells you why Roblox closed when it crashes.
 - Saves screenshots to `~/Pictures/Roblox` and recordings to `~/Videos/Roblox`.
 - Opens Play buttons and other Roblox links from your browser, including while Roblox is running.
+  A Play button signs Roblox in as the account your browser is using, so it switches accounts.
 - Fixes two crashes in Darling: one during the very first launch, and one in its audio code
   that closed Roblox mid-game.
 
@@ -61,6 +62,10 @@ ROBLOX_LINUX_SERVER_NOTIFY=1  # server location, looked up with ipinfo.io
 ROBLOX_LINUX_GAMEMODE=1       # Feral GameMode while Roblox runs
 ROBLOX_LINUX_LINKS=1          # open roblox: and roblox-player: links here; 0 hands them back
 ```
+
+A Play button (`roblox-player:` link) restarts Roblox if it is already open: the Mac client handles
+these links in a new process, and that process signs in with the ticket in the link. `roblox:`
+links go to the running client without a restart.
 
 `FFlags.json` holds Roblox flag overrides and starts empty. Roblox decides which flags it accepts,
 and some flags can get accounts banned, so change it only if you know what a flag does. Press F8

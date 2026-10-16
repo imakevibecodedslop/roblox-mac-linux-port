@@ -154,14 +154,14 @@ class Game:
         return activity
 
 
-def open_link(release, url):
-    """Hand a roblox: link to the running client through the UI helper's link socket."""
+def send_to_client(release, message):
+    """Send a roblox: link, or "quit", to the running client through the UI helper's link socket."""
     for path in (release / 'DO_NOT_SHARE').glob('launch.*/links.sock'):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
             connection.settimeout(5)
             try:
                 connection.connect(str(path))
-                connection.sendall(url.encode() + b'\n')
+                connection.sendall(message.encode() + b'\n')
                 return True
             except OSError:
                 continue  # a leftover socket from an earlier session
@@ -232,7 +232,7 @@ class Companion:
             self.deliver_link()
 
     def deliver_link(self):
-        if not open_link(self.data.parent, self.link):
+        if not send_to_client(self.data.parent, self.link):
             log('could not hand the link to Roblox')
         self.link = None
 
@@ -338,7 +338,9 @@ class Companion:
 
 if __name__ == '__main__':
     if sys.argv[1] == '--open-link':
-        sys.exit(0 if open_link(Path(sys.argv[2]), sys.argv[3]) else 1)
+        sys.exit(0 if send_to_client(Path(sys.argv[2]), sys.argv[3]) else 1)
+    if sys.argv[1] == '--quit':
+        sys.exit(0 if send_to_client(Path(sys.argv[2]), 'quit') else 1)
     try:
         Companion(Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3] if len(sys.argv) > 3 else None).run()
     except KeyboardInterrupt:

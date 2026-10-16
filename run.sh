@@ -110,19 +110,31 @@ for scheme in roblox-player roblox; do
         [ -n "$previous" ] && xdg-mime default "$previous" "x-scheme-handler/$scheme" 2>/dev/null || true
     fi
 done
-link=
+notify() {
+    command -v notify-send >/dev/null && notify-send --app-name=Roblox "--icon=$HERE/compat/roblox-linux.svg" Roblox "$1" 2>/dev/null
+    echo "$1" >&2
+}
+# roblox-player: links (Play buttons) carry a login ticket for the browser's account. Roblox handles
+# them in a fresh process started with -protocolString, which also signs in as that account; a
+# second process cannot reach the window, so the running Roblox is closed first instead.
+# roblox: links go to the running client's URL handler.
+link= play=
 case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
-    roblox:?*|roblox-player:?*) [ "$#" = 1 ] && { link=$1; shift; };;
+    roblox-player:?*) [ "$#" = 1 ] && { link=$1; play=1; shift; };;
+    roblox:?*) [ "$#" = 1 ] && { link=$1; shift; };;
 esac
-# A second launch would exit silently on the instance lock; hand a link to the running client,
-# otherwise say why nothing happens.
 if [ -e "$HERE/DO_NOT_SHARE/instance.lock" ] && ! flock -n "$HERE/DO_NOT_SHARE/instance.lock" true; then
-    if [ -n "$link" ] && python3 -I "$HERE/compat/companion.py" --open-link "$HERE" "$link"; then
+    if [ -n "$play" ]; then
+        if ! python3 -I "$HERE/compat/companion.py" --quit "$HERE" || ! flock -w 30 "$HERE/DO_NOT_SHARE/instance.lock" true; then
+            notify 'Roblox could not be closed to open the game from your browser. Close it and try again.'
+            exit 1
+        fi
+    elif [ -n "$link" ] && python3 -I "$HERE/compat/companion.py" --open-link "$HERE" "$link"; then
         exit 0
+    else
+        notify 'Roblox is already running.'
+        exit 1
     fi
-    command -v notify-send >/dev/null && notify-send --app-name=Roblox "--icon=$HERE/compat/roblox-linux.svg" Roblox 'Roblox is already running.' 2>/dev/null
-    echo 'Roblox is already running.' >&2
-    exit 1
 fi
 # Roblox updates before launch. ROBLOX_LINUX_UPDATES in DO_NOT_SHARE/config.env: ask (default),
 # auto or off. Offline or unanswered checks launch the installed client.
@@ -166,7 +178,11 @@ if [ ! -d "$HERE/DO_NOT_SHARE/prefix" ]; then
     "$HERE/RobloxLinux.AppImage" --shell true >/dev/null 2>&1 || true
     flock -w 60 "$HERE/DO_NOT_SHARE/instance.lock" true || true
 fi
-# Discord Rich Presence, server location, GameMode and a pending browser link (see
+if [ -n "$play" ]; then
+    set -- -protocolString "$link"
+    link=
+fi
+# Discord Rich Presence, server location, GameMode and a pending roblox: link (see
 # compat/companion.py); it exits with us.
 [ -f "$HERE/compat/companion.py" ] && python3 -I "$HERE/compat/companion.py" "$HERE" "$$" ${link:+"$link"} </dev/null &
 exec "$HERE/RobloxLinux.AppImage" --debug "$@"
