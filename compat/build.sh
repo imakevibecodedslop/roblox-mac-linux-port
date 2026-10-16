@@ -5,7 +5,7 @@ set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 OUT=$HERE/frameworks/CoreHaptics.framework
 work=$(mktemp -d)
-trap 'command rm -rf -- "$work"' EXIT
+trap 'rm -rf -- "$work"' EXIT
 cat > "$work/libobjc.tbd" <<'EOF'
 --- !tapi-tbd
 tbd-version: 4

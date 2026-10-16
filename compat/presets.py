@@ -3,8 +3,8 @@
 character sounds, the old avatar editor background, a custom font and other emoji. They replace
 files inside the installed client and change nothing else; no Roblox flags are involved.
 
-  presets.py apply RELEASE   bring RobloxVersion in line with the settings; run.sh does this
-                             before every launch
+  presets.py RELEASE   bring RobloxVersion in line with the settings; run.sh does this before
+                       every launch
 
 Settings (DO_NOT_SHARE/config.env, KEY=value):
   ROBLOX_LINUX_CURSOR=default        default, 2006 or 2013
@@ -34,7 +34,7 @@ USER_AGENT = 'RobloxLinux-presets/1.0'
 DEFAULTS = {'ROBLOX_LINUX_CURSOR': 'default', 'ROBLOX_LINUX_OLD_SOUNDS': '0',
             'ROBLOX_LINUX_OLD_AVATAR_BACKGROUND': '0', 'ROBLOX_LINUX_EMOJI': 'default'}
 
-CURSORS = {'2006': 'cursor/2006', '2013': 'cursor/2013'}
+CURSORS = ('2006', '2013')
 CURSOR_FILES = ('ArrowCursor.png', 'ArrowFarCursor.png')
 
 # Bloxstrap's list; the Mac client's falling sound is Ogg Vorbis rather than MP3.
@@ -99,18 +99,6 @@ def is_font(path):
         return False
 
 
-def emoji_file(data, name):
-    return data / 'presets/emoji' / EMOJI[name][1]
-
-
-def sha256(path):
-    digest = hashlib.sha256()
-    with open(path, 'rb') as file:
-        for block in iter(lambda: file.read(1 << 20), b''):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def write_atomically(path, data, mode=0o644):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f'.{path.name}.presets-tmp')
@@ -121,8 +109,8 @@ def write_atomically(path, data, mode=0o644):
 
 def fetch_emoji(data, name):
     """Download an emoji font once and keep it in DO_NOT_SHARE/presets/emoji. Raises on failure."""
-    path = emoji_file(data, name)
-    if path.is_file() and sha256(path) == EMOJI[name][2]:
+    path = data / 'presets/emoji' / EMOJI[name][1]
+    if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == EMOJI[name][2]:
         return path
     request = urllib.request.Request(EMOJI_RELEASE + EMOJI[name][1], headers={'User-Agent': USER_AGENT})
     with urllib.request.urlopen(request, timeout=30) as response:
@@ -140,10 +128,15 @@ class Client:
         self.resources = release / CLIENT
         self.state_path = release / STATE
         self.originals = release / ORIGINALS
+        # A damaged record is an error, not a fresh start: starting over would back up already
+        # replaced files as Roblox's originals.
         try:
             self.replaced = json.loads(self.state_path.read_text())['replaced']
-        except (FileNotFoundError, ValueError, KeyError):
+        except FileNotFoundError:
             self.replaced = {}
+        except (ValueError, KeyError) as error:
+            raise ValueError(f'{self.state_path} is damaged ({error}). Delete the RobloxVersion folder; '
+                             'the next launch downloads a clean client.') from None
 
     def save(self):
         write_atomically(self.state_path, json.dumps({'replaced': self.replaced}, indent=1).encode())
@@ -191,10 +184,10 @@ def wanted_files(release, client, settings):
     data = release / 'DO_NOT_SHARE'
     wanted = {}
     complete = True
-    cursor = CURSORS.get(settings['ROBLOX_LINUX_CURSOR'])
-    if cursor:
+    cursor = settings['ROBLOX_LINUX_CURSOR']
+    if cursor in CURSORS:
         for name in CURSOR_FILES:
-            wanted[f'content/textures/Cursors/KeyboardMouse/{name}'] = (ASSETS / cursor / name).read_bytes()
+            wanted[f'content/textures/Cursors/KeyboardMouse/{name}'] = (ASSETS / 'cursor' / cursor / name).read_bytes()
     if settings['ROBLOX_LINUX_OLD_SOUNDS'] == '1':
         for relative, asset in OLD_SOUNDS.items():
             if client.has(relative):
@@ -243,6 +236,10 @@ def apply(release):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3 or sys.argv[1] != 'apply':
-        sys.exit('Usage: presets.py apply RELEASE')
-    sys.exit(0 if apply(Path(sys.argv[2])) else 1)
+    if len(sys.argv) != 2:
+        sys.exit('Usage: presets.py RELEASE')
+    try:
+        sys.exit(0 if apply(Path(sys.argv[1])) else 1)
+    except ValueError as error:
+        log(str(error))
+        sys.exit(1)

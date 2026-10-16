@@ -1,5 +1,6 @@
 #!/bin/sh
-# Terminal launcher with diagnostics. --diagnose checks the system without starting Roblox.
+# Launcher for the menu entry, browser links and the terminal: desktop integration, update prompt,
+# appearance options, then the AppImage. --diagnose checks the system without starting Roblox.
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 # AppImageLauncher can relocate the image or run a memfd whose parent is /.
@@ -199,7 +200,7 @@ if [ -n "$play" ]; then
 fi
 # Appearance options from the settings window (cursor, sounds, fonts, emoji, avatar background):
 # compat/presets.py copies them into the client, or puts Roblox's own files back.
-if [ -f "$HERE/compat/presets.py" ] && ! python3 -I "$HERE/compat/presets.py" apply "$HERE"; then
+if [ -f "$HERE/compat/presets.py" ] && ! python3 -I "$HERE/compat/presets.py" "$HERE"; then
     notify 'Some appearance options could not be applied this time.'
 fi
 # Discord Rich Presence, server location, GameMode and a pending roblox: link (see

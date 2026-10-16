@@ -55,13 +55,18 @@ def section(title):
     return label
 
 
-def row(title, subtitle, control):
+def hint_label(text=''):
+    hint = Gtk.Label(label=text, xalign=0, wrap=True, max_width_chars=48)
+    hint.get_style_context().add_class('dim-label')
+    return hint
+
+
+def row(title, hint, control):
+    """A setting: its title, the dim text under it (a string or a label kept for updates), and its control."""
     text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
     text.pack_start(Gtk.Label(label=title, xalign=0), False, False, 0)
-    if subtitle:
-        hint = Gtk.Label(label=subtitle, xalign=0, wrap=True, max_width_chars=48)
-        hint.get_style_context().add_class('dim-label')
-        text.pack_start(hint, False, False, 0)
+    if hint:
+        text.pack_start(hint if isinstance(hint, Gtk.Label) else hint_label(hint), False, False, 0)
     box = Gtk.Box(spacing=24)
     box.pack_start(text, True, True, 0)
     control.set_valign(Gtk.Align.CENTER)
@@ -148,33 +153,35 @@ def build_window(release):
     look.pack_start(row('Mouse cursor', 'The arrow Roblox shows in games.', cursor), False, False, 0)
 
     emoji = choices(config, 'ROBLOX_LINUX_EMOJI', EMOJI_CHOICES)
-    emoji_row = row('Emoji', 'Other emoji fonts are downloaded from Bloxstrap on GitHub when chosen.', emoji)
-    look.pack_start(emoji_row, False, False, 0)
-    emoji_chosen = [emoji.get_active_id()]
+    look.pack_start(row('Emoji', 'Other emoji fonts are downloaded from Bloxstrap on GitHub when chosen.', emoji),
+                    False, False, 0)
+    saved_emoji = emoji.get_active_id()
 
     def emoji_downloaded(name, error):
+        nonlocal saved_emoji
         emoji.set_sensitive(True)
         if error:
-            emoji.set_active_id(emoji_chosen[0])
+            emoji.set_active_id(saved_emoji)
             show_error(window, f'The {presets.EMOJI[name][0]} emoji could not be downloaded.\n\n{error}')
         else:
-            emoji_chosen[0] = name
+            saved_emoji = name
             config.set('ROBLOX_LINUX_EMOJI', name)
 
     def download_emoji(name):
         try:
             presets.fetch_emoji(data, name)
             error = None
-        except Exception as failure:  # shown to the user; the choice is not saved
+        except (OSError, ValueError) as failure:
             error = str(failure)
         GLib.idle_add(emoji_downloaded, name, error)
 
     def emoji_changed(combo):
+        nonlocal saved_emoji
         name = combo.get_active_id()
-        if name == emoji_chosen[0]:
+        if name == saved_emoji:
             return
         if name not in presets.EMOJI:
-            emoji_chosen[0] = name
+            saved_emoji = name
             config.set('ROBLOX_LINUX_EMOJI', name)
             return
         combo.set_sensitive(False)
@@ -185,11 +192,8 @@ def build_window(release):
     font_file = presets.custom_font(data)
     font_name_file = font_file.with_suffix('.name')
     font_button = Gtk.Button()
-    font_row = row('Font', '', font_button)
-    look.pack_start(font_row, False, False, 0)
-    font_subtitle = Gtk.Label(xalign=0, wrap=True, max_width_chars=48)
-    font_subtitle.get_style_context().add_class('dim-label')
-    font_row.get_children()[0].pack_start(font_subtitle, False, False, 0)
+    font_subtitle = hint_label()
+    look.pack_start(row('Font', font_subtitle, font_button), False, False, 0)
 
     def show_font():
         if presets.is_font(font_file):
@@ -240,6 +244,7 @@ def build_window(release):
     outer.pack_start(note, False, False, 0)
     window.connect('destroy', Gtk.main_quit)
     return window
+
 
 if __name__ == '__main__':
     # The Wayland app ID; it matches roblox-mac.desktop, which supplies the icon.

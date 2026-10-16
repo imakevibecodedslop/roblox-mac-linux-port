@@ -95,20 +95,17 @@ in a game for the runtime's Custom Settings overlay.
 storage, logs and caches. Never share it or include it in an archive. Everything else in the
 folder is safe to share.
 
-Two pieces of this release change how the Roblox client itself behaves, and you should know
-about both:
-
-- `compat/titlebar.c` adds missing macOS window functions inside the client.
-- The same library keeps one client setting, `CustomTitleBarM1Enabled`, switched off in
-  memory. That setting is Roblox's titlebar experiment, which draws a second title strip
-  under the real titlebar.
-
+`compat/titlebar.c` runs inside the Roblox client. It adds macOS window functions that Darling
+lacks, and it keeps one client setting, `CustomTitleBarM1Enabled`, switched off in memory. That
+setting is Roblox's titlebar experiment, which draws a second title strip under the real titlebar.
 `compat/audio.c` changes Darling's AudioToolbox, not Roblox: stopping an audio unit that is already
 closed returns an error, as on macOS, instead of crashing.
 
 ## Troubleshooting
 
 - `sh run.sh --diagnose` writes a system report without starting Roblox.
+- A see-through window that never finishes starting means the client cannot reach Roblox's
+  servers. Check your connection, and your VPN where Roblox is blocked.
 - Every launch logs to `DO_NOT_SHARE/diagnostics/<time>/runtime.log`. When Roblox closes
   unexpectedly, a notification gives the reason and the log's location. Review logs before sharing
   them; they can contain account details.
@@ -157,7 +154,7 @@ with `compat/ui-helper.patch`:
    `compat/metal2vulkan.patch`, copy `third_party/metal2vulkan-Cargo.lock` to `Cargo.lock`, and run
    `cargo build --release --locked --features serde --bin metal2vulkan`. Pass
    `--remap-path-prefix` in `RUSTFLAGS` to keep build paths out of the binary.
-6. Replace both with `tools/repack-appimage.sh ORIGINAL.AppImage libroblox-wayland.so metal2vulkan OUTPUT.AppImage`.
+6. Put both into the AppImage with `tools/repack-appimage.sh ORIGINAL.AppImage libroblox-wayland.so metal2vulkan OUTPUT.AppImage`.
 7. Package with `tools/make-release.sh RobloxLinux.AppImage dist/`.
 
 The helper links the C++ runtime dynamically against the AppImage's bundled libstdc++ and needs at
@@ -170,4 +167,4 @@ version follows that fork's approach to window decorations.
 
 Bundled components and their licenses are listed in [THIRD_PARTY.md](THIRD_PARTY.md) and
 `licenses/`. Darling is GPL-3.0. The source for the AppImage's components is the snapshot linked
-above plus this repository's patch.
+above plus this repository's two patches.
