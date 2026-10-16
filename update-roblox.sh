@@ -15,11 +15,12 @@ export HOME=$DATA/home XDG_CONFIG_HOME=$DATA/config
 export XDG_DATA_HOME=$DATA/share XDG_CACHE_HOME=$DATA/cache
 export TMPDIR=$DATA/tmp TMP=$DATA/tmp TEMP=$DATA/tmp
 mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME" "$TMPDIR"
-exec 9>"$DATA/instance.lock"
-flock -n 9 || { echo 'Close Roblox before updating.' >&2; exit 1; }
-# Serialize updates for this release folder.
+# Serialize updates for this release folder. Checked first: a running update also holds the
+# instance lock below.
 exec 8<"$HERE"
 flock -n 8 || { echo 'An update is already running.' >&2; exit 1; }
+exec 9>"$DATA/instance.lock"
+flock -n 9 || { echo 'Close Roblox before updating.' >&2; exit 1; }
 # Children get the locks closed (8<&- 9>&-): a helper that outlives this script, such as the
 # AppImage's filesystem mount, would otherwise keep Roblox from starting after the update.
 prepared_with=$(stat -c '%s-%Y' "$HERE/RobloxLinux.AppImage")

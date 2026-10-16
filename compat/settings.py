@@ -2,7 +2,6 @@
 """Settings window for the Linux additions. Changes are written to DO_NOT_SHARE/config.env at
 once and take effect on the next launch. Opened by `run.sh --settings` or the menu entry's
 Settings action."""
-import importlib.util
 from pathlib import Path
 import shutil
 import subprocess
@@ -13,11 +12,11 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import GLib, Gtk
 
-# presets.py sits beside this file; python3 -I leaves the script's folder out of sys.path.
+# Sibling modules in compat/; python3 -I leaves the script's folder out of sys.path.
+sys.path.insert(0, str(Path(__file__).parent))
 sys.dont_write_bytecode = True
-_spec = importlib.util.spec_from_file_location('presets', Path(__file__).with_name('presets.py'))
-presets = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(presets)
+import config
+import presets
 
 DEFAULTS = {'ROBLOX_LINUX_UPDATES': 'ask', 'ROBLOX_LINUX_DISCORD': '1', 'ROBLOX_LINUX_SERVER_NOTIFY': '1',
             'ROBLOX_LINUX_GAMEMODE': '1', 'ROBLOX_LINUX_LINKS': '1', **presets.DEFAULTS}
@@ -35,14 +34,13 @@ class Config:
 
     def get(self, key):
         for line in reversed(self.lines):
-            name, _, value = line.strip().removeprefix('export ').partition('=')
-            if name == key:
-                return value.strip().strip('"\'')
+            entry = config.parse_line(line)
+            if entry and entry[0] == key:
+                return entry[1]
         return DEFAULTS[key]
 
     def set(self, key, value):
-        self.lines = [line for line in self.lines
-                      if line.strip().removeprefix('export ').partition('=')[0] != key]
+        self.lines = [line for line in self.lines if (config.parse_line(line) or (None,))[0] != key]
         self.lines.append(f'{key}={value}')
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text('\n'.join(self.lines) + '\n')
@@ -134,9 +132,16 @@ def build_window(release):
            'Feral GameMode tunes the system while Roblox runs.' if has_gamemode else 'GameMode is not installed.',
            has_gamemode)
 
-    pictures = subprocess.run(['xdg-user-dir', 'PICTURES'], capture_output=True, text=True).stdout.strip()
+    # run.sh sends screenshots to the desktop's Pictures folder when xdg-user-dir names a real one.
+    try:
+        named = subprocess.run(['xdg-user-dir', 'PICTURES'], capture_output=True, text=True).stdout.strip()
+    except OSError:
+        named = ''
+    pictures = Path(named) if named else None
+    if not pictures or not pictures.is_dir() or pictures == Path.home():
+        pictures = Path.home() / 'Pictures'
     folders = Gtk.Box(spacing=8)
-    for label, path in (('Screenshots', Path(pictures or Path.home() / 'Pictures') / 'Roblox'),
+    for label, path in (('Screenshots', pictures / 'Roblox'),
                         ('Logs', release / 'DO_NOT_SHARE/diagnostics')):
         button = Gtk.Button(label=label)
         button.connect('clicked', lambda _, folder=path: open_folder(folder))

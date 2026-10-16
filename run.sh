@@ -13,7 +13,8 @@ export TARGET_APPIMAGE=$HERE/RobloxLinux.AppImage
 unset APPIMAGE_TARGET_DIR
 export TMPDIR=$HERE/DO_NOT_SHARE/tmp TMP=$HERE/DO_NOT_SHARE/tmp TEMP=$HERE/DO_NOT_SHARE/tmp
 notify() {
-    command -v notify-send >/dev/null && notify-send --app-name=Roblox "--icon=$HERE/compat/roblox-linux.svg" Roblox "$1" 2>/dev/null
+    # Without a notification daemon notify-send fails; under set -e that would end the launcher.
+    command -v notify-send >/dev/null && notify-send --app-name=Roblox "--icon=$HERE/compat/roblox-linux.svg" Roblox "$1" 2>/dev/null || true
     echo "$1" >&2
 }
 # Launching needs Darling's UI socket at /Volumes/SystemRoot$HERE/DO_NOT_SHARE/launch.XXXXXX/ui.sock,
@@ -103,10 +104,11 @@ setting() {
     eval "printf '%s' \"\${$1:-\${value:-$2}}\""
 }
 # Browser links (Play buttons on roblox.com). ROBLOX_LINUX_LINKS=1 makes this the desktop's handler
-# for roblox: and roblox-player: links; 0 gives them back to the previous handler.
+# for roblox: and roblox-player: links; 0 gives them back to the previous handler. Links are only
+# taken while the menu entry exists, which a folder path with quotes or backslashes prevents.
 for scheme in roblox-player roblox; do
     current=$(xdg-mime query default "x-scheme-handler/$scheme" 2>/dev/null) || current=
-    if [ "$(setting ROBLOX_LINUX_LINKS 1)" = 1 ]; then
+    if [ "$(setting ROBLOX_LINUX_LINKS 1)" = 1 ] && [ -f "$host_data/applications/roblox-mac.desktop" ]; then
         if [ "$current" != roblox-mac.desktop ]; then
             printf '%s\n' "$current" > "$HERE/DO_NOT_SHARE/previous-$scheme-handler"
             xdg-mime default roblox-mac.desktop "x-scheme-handler/$scheme" 2>/dev/null || true
@@ -156,7 +158,7 @@ fi
 # auto or off. Offline or unanswered checks launch the installed client.
 updates=$(setting ROBLOX_LINUX_UPDATES ask)
 if [ "$updates" = ask ] || [ "$updates" = auto ]; then
-    latest=$(timeout 15 sh "$HERE/run.sh" --client-version 2>/dev/null | sed -n '/^version-[0-9a-f][0-9a-f]*$/p') || latest=
+    latest=$(timeout 15 "$HERE/RobloxLinux.AppImage" --client-version 2>/dev/null | sed -n '/^version-[0-9a-f][0-9a-f]*$/p') || latest=
     installed=$(cat "$HERE/RobloxVersion/.version" 2>/dev/null) || installed=
     skipped=$(cat "$HERE/DO_NOT_SHARE/skipped-version" 2>/dev/null) || skipped=
     if [ -n "$latest" ] && [ "$latest" != "$installed" ] && { [ "$updates" = auto ] || [ "$latest" != "$skipped" ]; }; then

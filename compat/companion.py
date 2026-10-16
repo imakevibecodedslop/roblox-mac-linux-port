@@ -24,6 +24,11 @@ import time
 import urllib.request
 import uuid
 
+# Sibling modules in compat/; python3 -I leaves the script's folder out of sys.path.
+sys.path.insert(0, str(Path(__file__).parent))
+sys.dont_write_bytecode = True
+import config
+
 # Bloxstrap's public Discord application, named "Roblox"; Discord shows its name and fallback art.
 DISCORD_CLIENT_ID = '1005469189907173486'
 USER_AGENT = 'RobloxLinux-companion/1.0'
@@ -38,7 +43,8 @@ CRASH = re.compile(r'RBXCRASH: (?:UnhandledException \()?(.*?)\)?$')
 # Darling reports its own failures between asterisks, e.g. "*** dserver_rpc_interrupt_enter failed ***".
 DARLING_ERROR = re.compile(r'^\*\*\* (.+) \*\*\*$')
 READY = re.compile(r'setStage: \(stage:LuaApp\)')
-LINK_TIMEOUT = 60
+# Fallback for when the ready line never appears; a cold start under Darling can take minutes.
+LINK_TIMEOUT = 180
 # Stopping Roblox from its terminal or the session ending is not a crash, and exit 73 means
 # another Roblox already held the instance lock.
 QUIET_SIGNALS = {'SIGINT', 'SIGTERM', 'SIGHUP'}
@@ -50,16 +56,9 @@ def log(message):
 
 
 def read_settings(data):
-    values = {'ROBLOX_LINUX_DISCORD': '1', 'ROBLOX_LINUX_SERVER_NOTIFY': '1', 'ROBLOX_LINUX_GAMEMODE': '1'}
-    try:
-        lines = (data / 'config.env').read_text().splitlines()
-    except FileNotFoundError:
-        lines = []
-    for line in lines:
-        key, _, value = line.strip().removeprefix('export ').partition('=')
-        if key in values:
-            values[key] = value.strip().strip('"\'')
-    return {key: os.environ.get(key, value) == '1' for key, value in values.items()}
+    values = config.read(data / 'config.env', {'ROBLOX_LINUX_DISCORD': '1', 'ROBLOX_LINUX_SERVER_NOTIFY': '1',
+                                               'ROBLOX_LINUX_GAMEMODE': '1'})
+    return {key: value == '1' for key, value in values.items()}
 
 
 def notify(title, body):

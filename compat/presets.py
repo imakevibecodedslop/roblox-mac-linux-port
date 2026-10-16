@@ -18,12 +18,18 @@ Every replaced file is listed in RobloxVersion/.presets.json and its original is
 RobloxVersion/.presets-original, so turning an option off puts Roblox's own file back. An update
 replaces RobloxVersion, and the next launch applies the options to the new client.
 """
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import sys
 import urllib.request
+
+# Sibling modules in compat/; python3 -I leaves the script's folder out of sys.path.
+sys.path.insert(0, str(Path(__file__).parent))
+sys.dont_write_bytecode = True
+import config
 
 ASSETS = Path(__file__).with_name('presets')
 CLIENT = 'RobloxVersion/RobloxPlayer.app/Contents/Resources'
@@ -72,19 +78,6 @@ FONT_MAGIC = (b'\x00\x01\x00\x00', b'true', b'OTTO', b'ttcf')
 
 def log(message):
     print(f'presets: {message}', file=sys.stderr, flush=True)
-
-
-def read_settings(data):
-    values = dict(DEFAULTS)
-    try:
-        lines = (data / 'config.env').read_text().splitlines()
-    except FileNotFoundError:
-        lines = []
-    for line in lines:
-        key, _, value = line.strip().removeprefix('export ').partition('=')
-        if key in values:
-            values[key] = value.strip().strip('"\'')
-    return {key: os.environ.get(key, value) for key, value in values.items()}
 
 
 def custom_font(data):
@@ -144,7 +137,8 @@ class Client:
     def original(self, relative):
         """Roblox's own bytes for a file, or None when Roblox has no such file."""
         if relative in self.replaced:
-            return (self.originals / relative).read_bytes() if self.replaced[relative] else None
+            backup = self.originals / relative
+            return backup.read_bytes() if self.replaced[relative] and backup.is_file() else None
         target = self.resources / relative
         return target.read_bytes() if target.is_file() else None
 
@@ -223,15 +217,18 @@ def wanted_files(release, client, settings):
 
 
 def apply(release):
-    client = Client(release)
-    if not client.resources.is_dir():
+    if not (release / CLIENT).is_dir():
         return True
-    wanted, complete = wanted_files(release, client, read_settings(release / 'DO_NOT_SHARE'))
-    for relative in list(client.replaced):
-        if relative not in wanted:
-            client.restore(relative)
-    for relative, data in wanted.items():
-        client.replace(relative, data)
+    # Two launches at once must not both record originals; the second waits for the first.
+    with open(release / 'RobloxVersion/.presets.lock', 'w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        client = Client(release)
+        wanted, complete = wanted_files(release, client, config.read(release / 'DO_NOT_SHARE/config.env', DEFAULTS))
+        for relative in list(client.replaced):
+            if relative not in wanted:
+                client.restore(relative)
+        for relative, data in wanted.items():
+            client.replace(relative, data)
     return complete
 
 
