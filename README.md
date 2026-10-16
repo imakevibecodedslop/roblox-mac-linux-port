@@ -165,6 +165,9 @@ most GLIBCXX 3.4.29 and GLIBC 2.38, the same as the original helper.
 The original project is spidercraft's. georgenoob1234 preserved the source snapshot, and this
 version follows that fork's approach to window decorations.
 
-Bundled components and their licenses are listed in [THIRD_PARTY.md](THIRD_PARTY.md) and
-`licenses/`. Darling is GPL-3.0. The source for the AppImage's components is the snapshot linked
-above plus this repository's two patches.
+This repository's own code is under the MIT license (`LICENSE`). The two patches change code
+that has its own terms: `compat/metal2vulkan.patch` follows metal2vulkan's LGPL-3.0-or-later, and
+`compat/ui-helper.patch` the source snapshot's. Bundled components and their licenses are listed in
+[THIRD_PARTY.md](THIRD_PARTY.md) and `licenses/`. Darling is GPL-3.0. The source for the AppImage's
+components is the snapshot linked above plus the two patches; each release also carries a copy of
+that snapshot.

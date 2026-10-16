@@ -11,7 +11,7 @@ trap 'rm -rf -- "$work"' EXIT
 STAGE=$work/RobloxLinuxRelease
 mkdir -p "$STAGE/compat" "$OUT"
 cp "$REPO/run.sh" "$REPO/update-roblox.sh" "$REPO/FFlags.json" "$REPO/README.md" "$REPO/THIRD_PARTY.md" \
-    "$REPO/.gitignore" "$STAGE/"
+    "$REPO/LICENSE" "$REPO/.gitignore" "$STAGE/"
 cp -r "$REPO/licenses" "$REPO/docs" "$STAGE/"
 for file in titlebar.c audio.c macho.h build.sh companion.py settings.py presets.py roblox-linux.svg ui-helper.patch \
     metal2vulkan.patch; do
