@@ -11,14 +11,16 @@ export APPIMAGELAUNCHER_DISABLE=1 _FORCE_HEADLESS=1
 export TARGET_APPIMAGE=$HERE/RobloxLinux.AppImage
 unset APPIMAGE_TARGET_DIR
 export TMPDIR=$HERE/DO_NOT_SHARE/tmp TMP=$HERE/DO_NOT_SHARE/tmp TEMP=$HERE/DO_NOT_SHARE/tmp
+notify() {
+    command -v notify-send >/dev/null && notify-send --app-name=Roblox "--icon=$HERE/compat/roblox-linux.svg" Roblox "$1" 2>/dev/null
+    echo "$1" >&2
+}
 # Launching needs Darling's UI socket at /Volumes/SystemRoot$HERE/DO_NOT_SHARE/launch.XXXXXX/ui.sock,
 # and a Unix socket path holds at most 107 bytes; longer paths fail later with an unclear GTK error.
 case "${1:-}" in --settings|--diagnose|--debug|--client-version|--download-client) ;; *)
     excess=$(( $(printf '%s' "/Volumes/SystemRoot$HERE/DO_NOT_SHARE/launch.XXXXXX/ui.sock" | wc -c) - 107 ))
     if [ "$excess" -gt 0 ]; then
-        message="This folder's path is $excess characters too long for Roblox. Move the folder somewhere shorter, such as ~/RobloxLinuxRelease."
-        command -v notify-send >/dev/null && notify-send --app-name=Roblox Roblox "$message" 2>/dev/null
-        echo "$message" >&2
+        notify "This folder's path is $excess characters too long for Roblox. Move the folder somewhere shorter, such as ~/RobloxLinuxRelease."
         exit 1
     fi;;
 esac
@@ -27,9 +29,12 @@ esac
 if [ -f "$HERE/compat/frameworks/CoreHaptics.framework/CoreHaptics" ]; then
     export DYLD_FRAMEWORK_PATH=/Volumes/SystemRoot$HERE/compat/frameworks${DYLD_FRAMEWORK_PATH:+:$DYLD_FRAMEWORK_PATH}
 fi
+# update-roblox.sh calls this script with HOME and XDG_* inside DO_NOT_SHARE; desktop integration
+# needs the real ones.
+case "$HOME" in "$HERE/DO_NOT_SHARE"/*) desktop=;; *) desktop=1;; esac
 # Window icon and menu entry: the compositor matches the helper's "roblox-mac" app ID to this desktop file.
 host_data=${XDG_DATA_HOME:-$HOME/.local/share}
-case "$HERE" in *[\"\`\$\\]*) ;; *)
+[ -n "$desktop" ] && case "$HERE" in *[\"\`\$\\]*) ;; *)
     icon=$host_data/icons/hicolor/scalable/apps/roblox-linux.svg
     if [ -f "$HERE/compat/roblox-linux.svg" ] && mkdir -p "$host_data/applications" "${icon%/*}"; then
         cmp -s "$HERE/compat/roblox-linux.svg" "$icon" || install -m 644 "$HERE/compat/roblox-linux.svg" "$icon"
@@ -56,7 +61,7 @@ for kind in PICTURES VIDEOS; do
     [ -d "$dir" ] && [ "$dir" != "$HOME" ] && user_dirs="${user_dirs}XDG_${kind}_DIR=\"$dir\"
 "
 done
-if [ -n "$user_dirs" ]; then
+if [ -n "$desktop" ] && [ -n "$user_dirs" ]; then
     mkdir -p "$HERE/DO_NOT_SHARE/config"
     printf '%s' "$user_dirs" > "$HERE/DO_NOT_SHARE/config/user-dirs.dirs"
 fi
@@ -66,7 +71,7 @@ fi
 # colour scheme and the titlebar button images (KDE's window-decorations module).
 export GTK_USE_PORTAL=${GTK_USE_PORTAL:-1}
 host_config=${XDG_CONFIG_HOME:-$HOME/.config}
-if [ -d "$host_config/gtk-3.0" ] && { [ -L "$HERE/DO_NOT_SHARE/config/gtk-3.0" ] || [ ! -e "$HERE/DO_NOT_SHARE/config/gtk-3.0" ]; }; then
+if [ -n "$desktop" ] && [ -d "$host_config/gtk-3.0" ] && { [ -L "$HERE/DO_NOT_SHARE/config/gtk-3.0" ] || [ ! -e "$HERE/DO_NOT_SHARE/config/gtk-3.0" ]; }; then
     mkdir -p "$HERE/DO_NOT_SHARE/config"
     ln -sfn "$host_config/gtk-3.0" "$HERE/DO_NOT_SHARE/config/gtk-3.0"
 fi
@@ -110,10 +115,6 @@ for scheme in roblox-player roblox; do
         [ -n "$previous" ] && xdg-mime default "$previous" "x-scheme-handler/$scheme" 2>/dev/null || true
     fi
 done
-notify() {
-    command -v notify-send >/dev/null && notify-send --app-name=Roblox "--icon=$HERE/compat/roblox-linux.svg" Roblox "$1" 2>/dev/null
-    echo "$1" >&2
-}
 # roblox-player: links (Play buttons) carry a login ticket for the browser's account. Roblox handles
 # them in a fresh process started with -protocolString, which also signs in as that account; a
 # second process cannot reach the window, so the running Roblox is closed first instead.
@@ -135,6 +136,15 @@ if [ -e "$HERE/DO_NOT_SHARE/instance.lock" ] && ! flock -n "$HERE/DO_NOT_SHARE/i
         notify 'Roblox is already running.'
         exit 1
     fi
+fi
+# A new install has no client yet; download it instead of failing.
+if [ ! -x "$HERE/RobloxVersion/RobloxPlayer.app/Contents/MacOS/RobloxPlayer" ]; then
+    notify 'Downloading Roblox. The first download and shader preparation take a few minutes.'
+    if ! sh "$HERE/update-roblox.sh"; then
+        notify 'Roblox could not be downloaded. Run update-roblox.sh in a terminal for details.'
+        exit 1
+    fi
+    flock -w 60 "$HERE/DO_NOT_SHARE/instance.lock" true || true
 fi
 # Roblox updates before launch. ROBLOX_LINUX_UPDATES in DO_NOT_SHARE/config.env: ask (default),
 # auto or off. Offline or unanswered checks launch the installed client.
@@ -174,7 +184,7 @@ fi
 # Darling's iokitd crash-loops during a new prefix's first boot and can take Roblox down with it.
 # Boot it once without Roblox; later boots are unaffected.
 if [ ! -d "$HERE/DO_NOT_SHARE/prefix" ]; then
-    command -v notify-send >/dev/null && notify-send --app-name=Roblox "--icon=$HERE/compat/roblox-linux.svg" Roblox 'Setting up for the first launch...' 2>/dev/null
+    notify 'Setting up for the first launch...'
     "$HERE/RobloxLinux.AppImage" --shell true >/dev/null 2>&1 || true
     flock -w 60 "$HERE/DO_NOT_SHARE/instance.lock" true || true
 fi

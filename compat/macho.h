@@ -84,8 +84,8 @@ static inline void *find_symbol(const struct mach_header_64 *header, long slide,
     while (name[length++])
         ;
     for (unsigned i = 0; i < symtab->nsyms; i++)
-        if ((symbols[i].type & N_TYPE) == N_SECT && symbols[i].strx < symtab->strsize &&
-            same(strings + symbols[i].strx, name, length))
+        if ((symbols[i].type & N_TYPE) == N_SECT && length <= symtab->strsize &&
+            symbols[i].strx <= symtab->strsize - length && same(strings + symbols[i].strx, name, length))
             return (void *)(symbols[i].value + slide);
     return 0;
 }

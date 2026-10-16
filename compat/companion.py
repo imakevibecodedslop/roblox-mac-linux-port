@@ -330,7 +330,8 @@ class Companion:
         log_path = run_log.relative_to(self.data.parent)
         # Native crashes in the client leave a register dump in crashes/fatal.log instead.
         fatal = self.data / 'crashes/fatal.log'
-        if not reason and fatal.exists() and fatal.stat().st_mtime >= self.started:
+        # The runtime creates it empty at launch and appends a report for each fault.
+        if not reason and fatal.exists() and fatal.stat().st_size and fatal.stat().st_mtime >= self.started:
             reason = 'The client crashed inside the compatibility layer'
             log_path = fatal.relative_to(self.data.parent)
         notify('Roblox closed unexpectedly', f'{reason or status[1]}\nLog: {log_path}')

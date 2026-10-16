@@ -1,4 +1,4 @@
-# Roblox Mac Linux Port
+![Roblox Mac Linux Port](docs/banner.png)
 
 Runs the official Intel macOS Roblox client on x86_64 Linux through Darling, with Metal translated
 to Vulkan. This is a continuation of spidercraft's Roblox-Mac-Linux-Port, whose repository was
@@ -21,7 +21,7 @@ Compared with the last original release (2026-09-25), this version:
 
 ## Requirements
 
-- x86_64 Linux with glibc 2.43 or newer (Fedora 44 or similar) and a Wayland desktop.
+- x86_64 Linux with glibc 2.39 or newer (Ubuntu 24.04, Fedora 40 or newer) and a Wayland desktop.
 - Vulkan drivers, Python 3, util-linux, curl and unzip.
 - Unprivileged user namespaces.
 
@@ -40,15 +40,14 @@ Download `RobloxLinuxRelease.tar.gz` from the Releases page. Keep it in a short 
 
 ```sh
 tar -xzf RobloxLinuxRelease.tar.gz -C ~
-cd ~/RobloxLinuxRelease
-sh update-roblox.sh   # downloads the official client and prepares shaders; takes a few minutes
-sh run.sh
+sh ~/RobloxLinuxRelease/run.sh
 ```
 
-The first `run.sh` adds **Roblox (Linux)** to your application menu and makes it the handler for
-Roblox links in your browser. Later launches can start from there; later updates are offered
-automatically before launch. The very first launch boots Darling once on its own, which takes
-about ten seconds.
+The first launch downloads the official client and prepares its shaders, which takes a few
+minutes, then boots Darling once on its own before starting Roblox. It also adds
+**Roblox (Linux)** to your application menu and makes it the handler for Roblox links in your
+browser. Later launches can start from the menu, and new Roblox versions are offered before
+launch. `sh update-roblox.sh` updates by hand.
 
 ## Settings
 
@@ -126,14 +125,16 @@ with `compat/ui-helper.patch`:
 1. Apply the patch inside `RobloxLinuxDev`.
 2. Fetch the pinned ImGui and Vulkan-Headers archives listed in `third_party/dependencies.json`.
 3. In `runtime`, run `sh browser/build-protocols.sh` and `sh profiler/build.sh`.
-4. Run the first `c++` command in `runtime/optimized/ui-build.sh`. Add
-   `-ffile-prefix-map=$PWD/=` so build paths stay out of the binary. Needed packages: the
-   GTK 3, WebKitGTK 4.1, json-glib, SDL3, Wayland, Xcursor and EGL/GL development packages.
+4. Run the first `c++` command in `runtime/optimized/ui-build.sh`. For step 3 and this one, add
+   `-include tools/glibc-baseline.h` and `-ffile-prefix-map=$PWD/=` to every compile (a `c++`
+   wrapper script first in `PATH` does it), so the helper runs on glibc 2.39 and build paths stay
+   out of the binary. Needed packages: the GTK 3, WebKitGTK 4.1, json-glib, SDL3, Wayland, Xcursor
+   and EGL/GL development packages.
 5. Replace the helper with `tools/repack-appimage.sh ORIGINAL.AppImage libroblox-wayland.so OUTPUT.AppImage`.
 6. Package with `tools/make-release.sh RobloxLinux.AppImage dist/`.
 
-The helper links the C++ runtime dynamically against the AppImage's bundled libstdc++. It needs
-only GLIBCXX 3.4.29, but it inherits the build machine's glibc requirement, hence glibc 2.43.
+The helper links the C++ runtime dynamically against the AppImage's bundled libstdc++ and needs at
+most GLIBCXX 3.4.29 and GLIBC 2.38, the same as the original helper.
 
 ## Credits and licenses
 

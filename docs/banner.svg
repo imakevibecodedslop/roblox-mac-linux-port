@@ -1,0 +1,40 @@
+<svg width="1600" height="400" viewBox="0 0 1600 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="top" x1="32" y1="6" x2="32" y2="31" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8A80"/>
+      <stop offset="1" stop-color="#F0313A"/>
+    </linearGradient>
+    <linearGradient id="bottom" x1="32" y1="34" x2="32" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E01B24"/>
+      <stop offset="1" stop-color="#9B1424"/>
+    </linearGradient>
+    <mask id="socket" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="white"/>
+      <rect x="25" y="25" width="14" height="14" rx="2.5" fill="black"/>
+    </mask>
+    <clipPath id="card">
+      <rect width="1600" height="400" rx="28"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#card)">
+    <rect width="1600" height="400" fill="#17181C"/>
+    <!-- The icon's tile, echoed as outlines at the right edge. -->
+    <g transform="translate(1270 -60) rotate(-15) scale(6.4)" stroke="#FFFFFF" stroke-opacity="0.05" stroke-width="0.35">
+      <path d="M14 7H50A7 7 0 0 1 57 14V30.5H7V14A7 7 0 0 1 14 7Z"/>
+      <path d="M7 33.5H57V50A7 7 0 0 1 50 57H14A7 7 0 0 1 7 50Z"/>
+    </g>
+    <g transform="translate(1390 250) rotate(-15) scale(3.2)" stroke="#FFFFFF" stroke-opacity="0.04" stroke-width="0.6">
+      <path d="M14 7H50A7 7 0 0 1 57 14V30.5H7V14A7 7 0 0 1 14 7Z"/>
+      <path d="M7 33.5H57V50A7 7 0 0 1 50 57H14A7 7 0 0 1 7 50Z"/>
+    </g>
+  </g>
+  <!-- compat/roblox-linux.svg at 240 px. -->
+  <g transform="translate(96 80) scale(3.75)">
+    <g transform="rotate(-15 32 32)" mask="url(#socket)">
+      <path d="M14 7H50A7 7 0 0 1 57 14V30.5H7V14A7 7 0 0 1 14 7Z" fill="url(#top)"/>
+      <path d="M7 33.5H57V50A7 7 0 0 1 50 57H14A7 7 0 0 1 7 50Z" fill="url(#bottom)"/>
+    </g>
+  </g>
+  <text x="400" y="196" font-family="Noto Sans" font-weight="700" font-size="84" fill="#F4F4F5" letter-spacing="-1">Roblox Mac Linux Port</text>
+  <text x="402" y="262" font-family="Noto Sans" font-size="34" fill="#A1A1AA">The macOS Roblox client on Linux, through Darling and Vulkan</text>
+</svg>
