@@ -1,3 +1,5 @@
+> **AI SLOP DISCLAIMER/TRANSPARENCY:** this port was written entirely by claude code, play tested by me. this disclaimer is the only text that hasnt been generated with ai, rest of this project is considered **ai slop.** use this at your own risk and please report issues if there are any. 
+
 ![Roblox Mac Linux Port](docs/banner.png)
 
 Runs the official Intel macOS Roblox client on x86_64 Linux through Darling, with Metal translated
